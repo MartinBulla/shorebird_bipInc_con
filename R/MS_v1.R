@@ -94,18 +94,6 @@ knitr::opts_chunk$set(message = FALSE, warning = FALSE, cache = TRUE)
       #d[pk == 15766.5]
       d = d[order(pk)]
 
-#'***
-#' ## TODO:ABSTRACT
-#' 
-#' <br> 
-#' Here, we use unprecedented comparative dataset on ~ `r as.character(round_any(nrow(d), 100))` incubation bouts from `r length(unique(d$pk_nest))` nests of `r length(unique(d$pop))` populations of `r length(unique(d$sp))` shorebird species from `r length(unique(d$genus))` genera to investigate how female bouts correlate with those of males and whether the correlations differ or are consistent across evolutionary history.  
-#' <br>
-#'
-#' ***
-
-#' ### Assortative mating for incubation bouts
-#' #### Across and within populations
-# Prepare data of f & m median bout per nest
   # aggregate bout per nest and sex TODO:remove unused variables
     dd_n=d[,list(
       sampling=median(sampling,na.rm=TRUE), 
@@ -119,12 +107,28 @@ knitr::opts_chunk$set(message = FALSE, warning = FALSE, cache = TRUE)
       by = list(suborder,genus,animal,sp,scinam,species,breeding_site,pop, lat_pop, pop_lat, year,nest, nn,pk_nest, pop_wing_f,pop_wing_m,app, tidal, tidal_pop,col_)
       ]
   
-  # limit data
-    dd_n=dd_n[which(!is.na(dd_n$med_f) & !is.na(dd_n$med_m)),]
-    dd_n10 = dd_n[n>=10 & n_f>=5 & n_m>=5]#; nrow(dd_n10)#; dd_n10[n_by_pop>10,length(unique(pop))]
-    
+    # limit data
+      dd_n=dd_n[which(!is.na(dd_n$med_f) & !is.na(dd_n$med_m)),]
+      dd_n10 = dd_n[n>=10 & n_f>=5 & n_m>=5]#; nrow(dd_n10)#; dd_n10[n_by_pop>10,length(unique(pop))]
+
+    # N nests
+      dd_n10[, n_by_pop := .N, pop]#; dd_n10[n_by_pop>10, length(unique(pop))]
+      dd_n10[, n_by_sp := .N, sp]#; nrow(dd_n10[sp>10]); dd_n10[n_by_sp>10,length(unique(sp))]
+
+#'***
+#' ## TODO:ABSTRACT
+#' 
+#' <br> 
+#' Here, we use unprecedented comparative dataset on ~ `r as.character(round_any(nrow(d), 100))` incubation bouts from `r length(unique(d$pk_nest))` nests of `r length(unique(d$pop))` populations of `r length(unique(d$sp))` shorebird species from `r length(unique(d$genus))` genera to investigate how female bouts correlate with those of males and whether the correlations differ or are consistent across evolutionary history.  
+#' <br>
+#'
+#' ***
+
+#' ### Assortative mating for incubation bouts
+#' #### Across and within populations
+# Prepare data of f & m median bout per nest 
+ 
   # estimate within population slopes
-    dd_n10[, n_by_pop := .N, pop]#; dd_n10[n_by_pop>10, length(unique(pop))]
     # r pearsons
       dd_n10[n_by_pop>5,  r := cor(med_f, med_m), by = pop]
       dd_n10[n_by_pop>5 & r<0, r_neg := 'yes']
@@ -135,18 +139,35 @@ knitr::opts_chunk$set(message = FALSE, warning = FALSE, cache = TRUE)
       dd_n10[n_by_pop>5 & !slope_pop_neg%in%'yes', slope_pop_neg := 'no']
   
   # estimate within species slopes
-      dd_n10[, n_by_sp := .N, sp]#; nrow(dd_n10[sp>10]); dd_n10[n_by_sp>10,length(unique(sp))]
-    # r pearsons
+      # r pearsons
       dd_n10[n_by_sp>5,  r_sp := cor(med_f, med_m), by = scinam]
       dd_n10[n_by_sp>5 & r_sp<0, r_sp_neg := 'yes']
       dd_n10[n_by_sp>5 & !r_sp_neg%in%'yes', r_sp_neg := 'no']
+
     # rlm
       dd_n10[n_by_sp>5,  slope_sp := rlm(med_f ~ med_m, weights = n)  %>% coef  %>% magrittr::extract(2), by = scinam] 
       dd_n10[n_by_sp>5 & slope_sp<0, slope_sp_neg := 'yes']
       dd_n10[n_by_sp>5 & !slope_sp_neg%in%'yes', slope_sp_neg := 'no']
+   
+# TEST START
+      dd_n10[n_by_pop > 5, p_value := {
+            m <- lm(med_f ~ med_m, weights = n)
+            summary(m)$coefficients[2, "Pr(>|t|)"]
+          }, 
+          by = pop]
 
+      dd_n10[!duplicated(pop) & n_by_pop > 5 & p_value>0.1,] 
+      dd_n10[slope_sp_neg == 'yes']
 
+      dd_n10[n_by_sp > 5, p_value_sp := {
+            model <- lm(med_f ~ med_m, weights = n)
+            summary(model)$coefficients[2, "Pr(>|t|)"]
+          }, 
+          by = scinam]
 
+      dd_n10[!duplicated(scinam) & n_by_sp > 5, summary(p_value_sp)]    
+      dd_n10[!duplicated(scinam) & n_by_sp > 5,]    
+# TEST STOP
 #+ f1 fig.width=9*inch,fig.height=5*1.95*inch
   # f1a
   f1a =
@@ -317,7 +338,7 @@ knitr::opts_chunk$set(message = FALSE, warning = FALSE, cache = TRUE)
     yourPics <- pic(x=r_pear, phy=tree_r_l)
 
   # plot
-    if(save_plot==TRUE){png(here::here("Output/Fig_2_width-64mm.png"), width=2.5,height=3.5,units="in",res=600)} else {
+    if(save_plot==TRUE){png(here::here("Output/Fig_2_width-64mm_v2.png"), width=2.5,height=3.5,units="in",res=600)} else {
     dev.new(width=2.3,height=3.5)}
 
     #save(file='freeze/Data/for_Liam.Rdata', objr)
@@ -326,7 +347,14 @@ knitr::opts_chunk$set(message = FALSE, warning = FALSE, cache = TRUE)
 
     plot(objr,lwd=2, sig=1,outline=FALSE,fsize=0.5,legend=FALSE)# legend=30)#mar=c(5.1,0.2,0.2,0.2),
 
-    add.color.bar(30,objr$cols,title=list("Pearson's r for ♀ & ♂\nmedian nest bout"),fsize=0.4,lims=objr$lims,digits=0,prompt=FALSE,x=0,y=1.1,subtitle="",outline=FALSE,lwd=3)#, mgp = c(0, 0,0))
+    add.color.bar(30, objr$cols, title="", digits=0, prompt=FALSE,
+      x=0, y=1.1, subtitle="", outline=FALSE, lwd=3, lims=NULL)
+    text(x=3, y=1.1, "0", pos=2, cex = 0.4) ## to the left
+    text(x=27, y=1.1, "1", pos=4, cex = 0.4) ## to the right
+    text(x=14, y=1, "Pearson's r for\n ♀ & ♂ median nest bout",
+      pos=3, cex = 0.4)
+
+    #add.color.bar(30,objr$cols,title=list("Pearson's r for ♀ & ♂\nmedian nest bout"),fsize=0.4,lims=objr$lims,digits=0,prompt=FALSE,x=0,y=1.1,subtitle="",outline=FALSE,lwd=3)#, mgp = c(0, 0,0))
     
     nodelabels(pch=21, cex=abs(yourPics)*10, bg="grey90", col = "grey50") # add phylogenetic contrast contrasts
     
