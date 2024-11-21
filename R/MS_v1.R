@@ -25,6 +25,7 @@ knitr::opts_chunk$set(message = FALSE, warning = FALSE, cache = TRUE)
     size_l = 0.75
     tx_legend_tit = 6
     inch = 0.393701 
+    nsim = 5000
    
 
   # packages and functions
@@ -37,7 +38,7 @@ knitr::opts_chunk$set(message = FALSE, warning = FALSE, cache = TRUE)
     tree$tip.label[tree$tip.label=="Catoptrophorus_semipalmatus"]="Tringa_semipalmata" # current name for this species  
       #plot(tree, main="Maximum Credibility Tree")  
       #plot(ladderize(tree, right = TRUE))
-  
+    
   # load and prepare bout data
     load(here::here("Data/Bulla_et_al_2016-comparative_all.RData"))  
     d$lat_a=abs(d$lat)
@@ -137,7 +138,8 @@ knitr::opts_chunk$set(message = FALSE, warning = FALSE, cache = TRUE)
       dd_n10[n_by_pop>5,  slope_pop := rlm(med_f ~ med_m, weights = n)  %>% coef  %>% magrittr::extract(2), by = pop] 
       dd_n10[n_by_pop>5 & slope_pop<0, slope_pop_neg := 'yes']
       dd_n10[n_by_pop>5 & !slope_pop_neg%in%'yes', slope_pop_neg := 'no']
-  
+      dd_n10[n_by_pop>5, slope_pop_certain := simulate_rlm(.SD), by = pop] #x = dd_n10[n_by_pop>10 & !duplicated(pop), ]; summary(factor(x$slope_pop_certain)) 
+
   # estimate within species slopes
       # r pearsons
       dd_n10[n_by_sp>5,  r_sp := cor(med_f, med_m), by = scinam]
@@ -148,30 +150,12 @@ knitr::opts_chunk$set(message = FALSE, warning = FALSE, cache = TRUE)
       dd_n10[n_by_sp>5,  slope_sp := rlm(med_f ~ med_m, weights = n)  %>% coef  %>% magrittr::extract(2), by = scinam] 
       dd_n10[n_by_sp>5 & slope_sp<0, slope_sp_neg := 'yes']
       dd_n10[n_by_sp>5 & !slope_sp_neg%in%'yes', slope_sp_neg := 'no']
+      dd_n10[n_by_pop>5, slope_sp_certain := simulate_rlm(.SD), by = scinam]
    
-# TEST START
-      dd_n10[n_by_pop > 5, p_value := {
-            m <- lm(med_f ~ med_m, weights = n)
-            summary(m)$coefficients[2, "Pr(>|t|)"]
-          }, 
-          by = pop]
-
-      dd_n10[!duplicated(pop) & n_by_pop > 5 & p_value>0.1,] 
-      dd_n10[slope_sp_neg == 'yes']
-
-      dd_n10[n_by_sp > 5, p_value_sp := {
-            model <- lm(med_f ~ med_m, weights = n)
-            summary(model)$coefficients[2, "Pr(>|t|)"]
-          }, 
-          by = scinam]
-
-      dd_n10[!duplicated(scinam) & n_by_sp > 5, summary(p_value_sp)]    
-      dd_n10[!duplicated(scinam) & n_by_sp > 5,]    
-# TEST STOP
 #+ f1 fig.width=9*inch,fig.height=5*1.95*inch
-  # f1a
+  # f1
   f1a =
-    ggplot(dd_n10[n_by_pop>10],aes(x = med_m, y = med_f, group = pop, weight=n, col = slope_pop_neg)) + 
+    ggplot(dd_n10[n_by_pop>10],aes(x = med_m, y = med_f, group = pop, weight=n, col = slope_pop_certain)) + 
       #geom_point(aes(size = n), alpha = 0.5)+#geom_point(size = 0.5, alpha = 0.5) + 
       geom_smooth(method = 'rlm', se = FALSE, alpha = 0.2, linewidth = size_l)+
       geom_abline(intercept = 0, slope = 1, lty =3)+
@@ -183,7 +167,7 @@ knitr::opts_chunk$set(message = FALSE, warning = FALSE, cache = TRUE)
       scale_color_manual(values=c(male, female))+ 
       #scale_size(breaks = c(1,15,30), name = 'n days') +
       annotate("text", x=2.9, y=15.5, label= "Fits to nests' median bouts", col = "grey30", size = 2, hjust = 0) + 
-      geom_segment(aes(x = 0.75, y = 15.5, xend = 2.5, yend = 15.5), color = "darkgrey", size = .35) +
+      geom_segment(aes(x = 0.75, y = 15.5, xend = 2.5, yend = 15.5), color = "darkgrey", linewidth = .35) +
 
       annotate("text", x=3, y=14.5, label= "Slope", col = "grey30", size = 2, hjust = 0) + 
       annotate("text", x=1.1, y=14.5, label= "+", col = male, size = 2.75) + 
@@ -268,6 +252,7 @@ knitr::opts_chunk$set(message = FALSE, warning = FALSE, cache = TRUE)
       geom_point(aes(size = n), alpha = 0.5)+#geom_point(size = 0.5, alpha = 0.5) + 
       facet_wrap(~pop_lat, nrow = 4, scales = "free") + 
       geom_smooth(method = 'rlm', se = FALSE, alpha = 0.2, linewidth = size_l)+
+      geom_smooth(method = 'lm', se = FALSE, alpha = 0.2, linewidth = size_l, col = 'red')+
       geom_abline(intercept = 0, slope = 1, lty =3)+
       #stat_cor(aes(label = ..r.label..),  label.x = 3, size = 2) + 
       #facet_wrap(~pop) +
@@ -316,10 +301,123 @@ knitr::opts_chunk$set(message = FALSE, warning = FALSE, cache = TRUE)
   # prepere data for plotting
     ds = dd_n10[n_by_sp>10]
     ds = ds[, cor(med_f, med_m), by = list(scinam, animal)]  %>% setnames(old = 'V1', new = 'r')
-    #summary(ds)
-    
+    #summary(ds); summary(ds[!scinam%in%'Limosa lapponica'])
+
     sp_r=data.frame(ds[,c("r","animal")])
     tree_r = drop.tip(tree, tree$tip.label[!tree$tip.label%in%sp_r$animal])
+    # fix issues with duplicated node labels  
+      duplicated_nodes <- duplicated(tree$node.label)#; tree$node.label[duplicated_nodes]  # Duplicate node labels
+      tree$node.label <- paste0("Node_", seq_along(tree$node.label))  # Make unique
+      # Or remove node labels
+      tree$node.label <- NULL
+      tree$tip.label <- make.unique(tree$tip.label)
+
+      all_labels <- c(tree$tip.label, tree$node.label)
+      any(duplicated(all_labels))  # Should return FALSE
+
+      is.rooted(tree) #;is.ultrametric(tree)
+
+    sp_r=data.frame(ds[,c("r","animal")])
+    tree_r = drop.tip(tree, tree$tip.label[!tree$tip.label%in%sp_r$animal])
+
+
+    duplicated_nodes <- duplicated(tree_r$node.label)#; tree$node.label[duplicated_nodes]  # Duplicate node labels
+      tree_r$node.label <- paste0("Node_", seq_along(tree_r$node.label))  # Make unique
+      # Or remove node labels
+      tree$node.label <- NULL
+      tree$tip.label <- make.unique(tree$tip.label)
+
+      a
+
+    comp_data <- comparative.data(tree_r, ds, animal, vcv = TRUE)
+
+
+  ### TEST
+duplicated_tips <- duplicated(tree_r$tip.label)
+duplicated_nodes <- duplicated(tree_r$node.label)
+tree_r$tip.label[duplicated_tips]  # Duplicate tip labels
+tree_r$node.label[duplicated_nodes]  # Duplicate node labels
+
+tree_r$node.label <- paste0("Node_", seq_along(tree_r$node.label))  # Make unique
+# Or remove node labels
+tree_r$node.label <- NULL
+
+tree_r$tip.label <- make.unique(tree_r$tip.label)
+
+all_labels <- c(tree_r$tip.label, tree_r$node.label)
+any(duplicated(all_labels))  # Should return FALSE
+
+is.rooted(tree_r)
+is.ultrametric(tree_r)
+tree_r_ultrametric <- compute.brlen(tree_r, method = "Grafen")
+is.ultrametric(tree_r_ultrametric)  # Should return TRUE
+
+comp_data <- comparative.data(tree_r_ultrametric, ds, animal, vcv = TRUE)
+m<-pgls(r~1,comp_data,lambda='ML')
+summary(m)
+  ####
+
+    comp_data <- comparative.data(tree_r, ds, animal, vcv = TRUE)
+
+      m<-pgls(r~1,comp_data,lambda='ML')
+      summary(m)
+
+    rownames(ds) <- ds$animal
+    save(file="freeze/Data/Peto.Rdata", ds, tree_r)
+
+    m<-pgls(r ~ 1,comparative.data(tree_r,ds,"animal"), lambda="ML")
+
+    ds <- ds[order(ds$animal), ]
+    tree_r <- reorder(tree_r, "cladewise")
+    comp_data <- comparative.data(phy = tree_r, data = ds, names.col = "animal", vcv = TRUE)
+
+    tree_r$node.label <- NULL
+
+
+    tr = tree_r$tip.label 
+    x = ds$animal  
+    tr[!tr%in%x]
+    x[!x%in%tr]
+
+    library(caper)   
+    
+
+    
+
+
+    model <- pgls(response ~ predictor, data = comp_data)
+    summary(model)
+
+    gls(r ~ 1,  data = ds)
+
+    bm_tree <- 
+    tree_P <- corPagel(1, phy = tree_r, form = ~animal)
+
+
+# Run the PGLS model with Brownian motion correlation structure
+  require(nlme)
+  m <- gls(
+    r ~ 1,
+    data = ds,            
+    correlation = corBrownian(phy = tree_r, form = ~animal),
+    method = "ML"
+  )
+
+  m <- gls(
+    r ~ 1,
+    data = ds,             # Remove rows with missing values
+    correlation = corPagel(1,tree_r, fixed=FALSE),
+    method = "ML"
+  )
+
+m = lm(r~1, ds)
+ds[, r:=resid(m)]
+
+phylosig(tree = tree_r, x = resid(m))
+x = ds$r
+names(x) = ds$animal
+phylosig(tree_r, x, method="lambda", test=FALSE, nsim=1000, se=NULL, start=NULL,control=list())
+
         
     row.names(sp_r)=sp_r$animal
     sp_r$animal=NULL

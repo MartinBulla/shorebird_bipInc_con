@@ -21,6 +21,9 @@ using<-function(...) {
 # Set system time
    Sys.setenv(TZ="UTC")
 
+# Set seed for reproducibility
+set.seed(25) 
+
 #' Extract time as numeric from POSIXct
 #' @param  x (POSIXct)
 #' @export
@@ -32,7 +35,7 @@ getime = function (x) {ifelse(is.na(x), as.numeric(NA), as.numeric(difftime(x, t
 getDay = function (x) {as.Date(trunc(x, "day"))}
 
 # load/install packages
-  packages = c('ape','arm','RColorBrewer','data.table', 'effects', 'forcats', 'ggExtra', 'ggnewscale', 'ggplot2', 'ggthemes', 'glue',  'grid','gridExtra', 'here', 'htmlTable', 'lattice', 'lubridate', 'magrittr', 'maptools', 'multcomp', 'pals','patchwork', 'performance', 'phangorn','phytools','plyr','raster','reshape2','scales','stringr','readxl','zoo', 'gt', 'tidyverse', 'ggpubr')
+  packages = c('ape','arm','RColorBrewer','data.table', 'effects', 'forcats', 'ggExtra', 'ggnewscale', 'ggplot2', 'ggthemes', 'glue',  'grid','gridExtra', 'here', 'htmlTable', 'lattice', 'lubridate', 'magrittr', 'maptools', 'multcomp', 'pals','patchwork', 'performance', 'phangorn','phytools','plyr','raster','reshape2', 'sandwich','scales','stringr','readxl','zoo', 'gt', 'tidyverse', 'ggpubr')
   sapply(packages, function(x) suppressPackageStartupMessages(using(x)) )
 
 # Customized ggplot themes
@@ -91,7 +94,33 @@ getDay = function (x) {as.Date(trunc(x, "day"))}
               legend.box.margin = margin(l = -6), #legend.justification = c(-1,0),
               legend.background = element_blank()
               )  
-
+# Function for group-wise robust regression credible intervals
+    simulate_rlm <- function(dt) {
+      n_sim = 5000
+      # Extract coefficients
+      rlm_model <- tryCatch(
+        rlm(med_f ~ med_m, weights = n, data = dt),
+        error = function(e) return(NULL)
+      )
+      coef_estimates <- coef(rlm_model)
+      
+      # Compute covariance matrix
+      residuals <- resid(rlm_model)
+      weights <- rlm_model$w
+      design_matrix <- model.matrix(rlm_model)
+      cov_matrix <- solve(t(design_matrix) %*% (weights * design_matrix))
+      
+      # Simulate from multivariate normal
+      set.seed(25)
+      sim_coefficients <- MASS::mvrnorm(n_sim, mu = coef_estimates, Sigma = cov_matrix)
+      
+      # Compute quantiles
+      ci <- apply(sim_coefficients, 2, quantile, probs = c(0.025, 0.975))
+        # Check if credible interval for slope crosses zero
+      
+      if((ci[1, 2] <= 0 && ci[2, 2] >= 0)==TRUE){'no'}else{'yes'}
+    }
+      
 # model assumption functions
   # mixed models
   m_ass = function(file_name = 'define', mo = m0, dat = d, fixed = NULL, categ = NULL, trans = "none", spatial = TRUE, temporal = TRUE, PNG = TRUE, outdir = 'Output/Model_ass/'){
