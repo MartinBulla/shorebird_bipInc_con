@@ -1,5 +1,5 @@
+#TODO:adjust size of the phylo contrasts (see nature papeer) 
 #TODO:adjust font size to fit the other figure
-
 
 require("ggtext")
 require('ggtree')
@@ -25,7 +25,7 @@ getnode <- function(...) {
         env <- get("last_plot.phylo", envir = .PlotPhyloEnv)
     }
     xy <- unlist(locator(n = 1))
-    points(xy[1], xy[2])
+    points(xy[1], xy[2]) 
     d <- sqrt((xy[1] - env$xx)^2 + (xy[2] - env$yy)^2)
     ii <- which(d == min(d))[1]
     ii
@@ -55,6 +55,21 @@ ptr <- rbind(td, nd)
 ptr[, node := as.numeric(node)]
 treei_c <- dplyr::full_join(treei, ptr, by = "node")
 
+# prepare phylogenetic contrasts
+r_pear=ds$r
+names(r_pear)=ds$scinam
+yourPics <- pic(x=r_pear, phy=treei)
+
+contrast_data <- data.table(
+  node = (Ntip(treei) + 1):(Ntip(treei) + Nnode(treei)),
+  pic = yourPics
+)
+
+treei_c <- treei_c %>%
+  left_join(contrast_data, by = "node")
+  
+
+
 # prepare genera images
 images = data.table(image = list.files(
     path = here::here("Illustrations/for_tree/"), 
@@ -71,6 +86,7 @@ images = data.table(image = list.files(
     )
 images$width = image_info(image_read(images$image))$width 
 images$height = image_info(image_read(images$image))$height 
+
 
 # add node indentifiers for vertical genus bars 
 treeid <- data.table(as_tibble(tidytree::as.treedata(treei)))
@@ -91,6 +107,9 @@ p <- ggtree::ggtree(treei_c, ladderize = ladderize_, right = TRUE) + #layout = "
                 x = genus_x, y = genus_y, image = image, size = I(width_tree/10)), by='width')+#, size = 0.1) +#inherit.aes = FALSE) +  # Adjust x and size as needed #, by = "width" 
     geom_point(data = data.frame(x = 91.5, y = c(5)), aes(x =x, y = y), color = "darkgrey", shape = 15, size = 1) +
     geom_point(data = data.frame(x = 91.5, y = c(11)), aes(x =x, y = y), color = "lightgrey", shape = 15, size = 1) +
+    geom_point(
+            aes(x = x, y = y, size = pic),
+            fill = "grey90", color = "grey50", pch = 21) +
     coord_cartesian(xlim = c(0,120))+
     guides(size = "none") + 
     labs(tag = '(b)') +

@@ -38,6 +38,8 @@ knitr::opts_chunk$set(message = FALSE, warning = FALSE, cache = TRUE)
     tree$tip.label[tree$tip.label=="Catoptrophorus_semipalmatus"]="Tringa_semipalmata" # current name for this species  
       #plot(tree, main="Maximum Credibility Tree")  
       #plot(ladderize(tree, right = TRUE))
+    tree$tip.label = gsub("_", " ", tree$tip.label)
+
     
   # load and prepare bout data
     load(here::here("Data/Bulla_et_al_2016-comparative_all.RData"))  
@@ -301,126 +303,14 @@ knitr::opts_chunk$set(message = FALSE, warning = FALSE, cache = TRUE)
   # prepere data for plotting
     ds = dd_n10[n_by_sp>10]
     ds = ds[, cor(med_f, med_m), by = list(scinam, animal)]  %>% setnames(old = 'V1', new = 'r')
+    ds = merge(ds, dd_n10[!duplicated(scinam), .(scinam,n_by_sp)])
     #summary(ds); summary(ds[!scinam%in%'Limosa lapponica'])
 
-    sp_r=data.frame(ds[,c("r","animal")])
-    tree_r = drop.tip(tree, tree$tip.label[!tree$tip.label%in%sp_r$animal])
-    # fix issues with duplicated node labels  
-      duplicated_nodes <- duplicated(tree$node.label)#; tree$node.label[duplicated_nodes]  # Duplicate node labels
-      tree$node.label <- paste0("Node_", seq_along(tree$node.label))  # Make unique
-      # Or remove node labels
-      tree$node.label <- NULL
-      tree$tip.label <- make.unique(tree$tip.label)
-
-      all_labels <- c(tree$tip.label, tree$node.label)
-      any(duplicated(all_labels))  # Should return FALSE
-
-      is.rooted(tree) #;is.ultrametric(tree)
-
-    sp_r=data.frame(ds[,c("r","animal")])
-    tree_r = drop.tip(tree, tree$tip.label[!tree$tip.label%in%sp_r$animal])
-
-
-    duplicated_nodes <- duplicated(tree_r$node.label)#; tree$node.label[duplicated_nodes]  # Duplicate node labels
-      tree_r$node.label <- paste0("Node_", seq_along(tree_r$node.label))  # Make unique
-      # Or remove node labels
-      tree$node.label <- NULL
-      tree$tip.label <- make.unique(tree$tip.label)
-
-      a
-
-    comp_data <- comparative.data(tree_r, ds, animal, vcv = TRUE)
-
-
-  ### TEST
-duplicated_tips <- duplicated(tree_r$tip.label)
-duplicated_nodes <- duplicated(tree_r$node.label)
-tree_r$tip.label[duplicated_tips]  # Duplicate tip labels
-tree_r$node.label[duplicated_nodes]  # Duplicate node labels
-
-tree_r$node.label <- paste0("Node_", seq_along(tree_r$node.label))  # Make unique
-# Or remove node labels
-tree_r$node.label <- NULL
-
-tree_r$tip.label <- make.unique(tree_r$tip.label)
-
-all_labels <- c(tree_r$tip.label, tree_r$node.label)
-any(duplicated(all_labels))  # Should return FALSE
-
-is.rooted(tree_r)
-is.ultrametric(tree_r)
-tree_r_ultrametric <- compute.brlen(tree_r, method = "Grafen")
-is.ultrametric(tree_r_ultrametric)  # Should return TRUE
-
-comp_data <- comparative.data(tree_r_ultrametric, ds, animal, vcv = TRUE)
-m<-pgls(r~1,comp_data,lambda='ML')
-summary(m)
-  ####
-
-    comp_data <- comparative.data(tree_r, ds, animal, vcv = TRUE)
-
-      m<-pgls(r~1,comp_data,lambda='ML')
-      summary(m)
-
-    rownames(ds) <- ds$animal
-    save(file="freeze/Data/Peto.Rdata", ds, tree_r)
-
-    m<-pgls(r ~ 1,comparative.data(tree_r,ds,"animal"), lambda="ML")
-
-    ds <- ds[order(ds$animal), ]
-    tree_r <- reorder(tree_r, "cladewise")
-    comp_data <- comparative.data(phy = tree_r, data = ds, names.col = "animal", vcv = TRUE)
-
-    tree_r$node.label <- NULL
-
-
-    tr = tree_r$tip.label 
-    x = ds$animal  
-    tr[!tr%in%x]
-    x[!x%in%tr]
-
-    library(caper)   
+    sp_r=data.frame(ds[,c("r","scinam")])
+    tree_r = drop.tip(tree, tree$tip.label[!tree$tip.label%in%sp_r$scinam])
     
-
-    
-
-
-    model <- pgls(response ~ predictor, data = comp_data)
-    summary(model)
-
-    gls(r ~ 1,  data = ds)
-
-    bm_tree <- 
-    tree_P <- corPagel(1, phy = tree_r, form = ~animal)
-
-
-# Run the PGLS model with Brownian motion correlation structure
-  require(nlme)
-  m <- gls(
-    r ~ 1,
-    data = ds,            
-    correlation = corBrownian(phy = tree_r, form = ~animal),
-    method = "ML"
-  )
-
-  m <- gls(
-    r ~ 1,
-    data = ds,             # Remove rows with missing values
-    correlation = corPagel(1,tree_r, fixed=FALSE),
-    method = "ML"
-  )
-
-m = lm(r~1, ds)
-ds[, r:=resid(m)]
-
-phylosig(tree = tree_r, x = resid(m))
-x = ds$r
-names(x) = ds$animal
-phylosig(tree_r, x, method="lambda", test=FALSE, nsim=1000, se=NULL, start=NULL,control=list())
-
-        
-    row.names(sp_r)=sp_r$animal
-    sp_r$animal=NULL
+    row.names(sp_r)=sp_r$scinam
+    sp_r$scinam=NULL
     sp_r$r=as.numeric(sp_r$r)
       
     svlr<-as.matrix(sp_r)[,1]
@@ -431,8 +321,9 @@ phylosig(tree_r, x, method="lambda", test=FALSE, nsim=1000, se=NULL, start=NULL,
 
   # prepare phylogenetic contrasts
     r_pear=ds$r
-    names(r_pear)=ds$animal
+    names(r_pear)=ds$scinam
     tree_r_l=ladderize(tree_r, right=T)
+    
     yourPics <- pic(x=r_pear, phy=tree_r_l)
 
   # plot
