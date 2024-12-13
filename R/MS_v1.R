@@ -46,6 +46,7 @@ knitr::opts_chunk$set(message = FALSE, warning = FALSE, cache = TRUE)
     d$lat_a=abs(d$lat)
     d=d[d$sex%in%c('f','m'),]
     d = data.table(d)
+     d[, length(unique(nest)), by = list(scinam, breeding_site)] 
 
     # adjust variables
       d[, lat_pop := factor(paste(round(mean(lat),2),sp)), pop]
@@ -117,6 +118,30 @@ knitr::opts_chunk$set(message = FALSE, warning = FALSE, cache = TRUE)
     # N nests
       dd_n10[, n_by_pop := .N, pop]#; dd_n10[n_by_pop>10, length(unique(pop))]
       dd_n10[, n_by_sp := .N, sp]#; nrow(dd_n10[sp>10]); dd_n10[n_by_sp>10,length(unique(sp))]
+    
+    # estimate within population slopes
+      # r pearsons
+      dd_n10[n_by_pop>5,  r := cor(med_f, med_m), by = pop]
+      dd_n10[n_by_pop>5 & r<0, r_neg := 'yes']
+      dd_n10[n_by_pop>5 & !r_neg%in%'yes', r_neg := 'no']
+      
+      # rlm
+      dd_n10[n_by_pop>5,  slope_pop := rlm(med_f ~ med_m, weights = n)  %>% coef  %>% magrittr::extract(2), by = pop] 
+      dd_n10[n_by_pop>5 & slope_pop<0, slope_pop_neg := 'yes']
+      dd_n10[n_by_pop>5 & !slope_pop_neg%in%'yes', slope_pop_neg := 'no']
+      dd_n10[n_by_pop>5, slope_pop_certain := simulate_rlm(.SD), by = pop] #x = dd_n10[n_by_pop>10 & !duplicated(pop), ]; summary(factor(x$slope_pop_certain)) 
+
+    # estimate within species slopes
+      # r pearsons
+      dd_n10[n_by_sp>5,  r_sp := cor(med_f, med_m), by = scinam]
+      dd_n10[n_by_sp>5 & r_sp<0, r_sp_neg := 'yes']
+      dd_n10[n_by_sp>5 & !r_sp_neg%in%'yes', r_sp_neg := 'no']
+
+      # rlm
+      dd_n10[n_by_sp>5,  slope_sp := rlm(med_f ~ med_m, weights = n)  %>% coef  %>% magrittr::extract(2), by = scinam] 
+      dd_n10[n_by_sp>5 & slope_sp<0, slope_sp_neg := 'yes']
+      dd_n10[n_by_sp>5 & !slope_sp_neg%in%'yes', slope_sp_neg := 'no']
+      dd_n10[n_by_sp>5, slope_sp_certain := simulate_rlm(.SD), by = scinam]   
 
 #'***
 #' ## TODO:ABSTRACT
@@ -129,31 +154,337 @@ knitr::opts_chunk$set(message = FALSE, warning = FALSE, cache = TRUE)
 
 #' ### Assortative mating for incubation bouts
 #' #### Across and within populations
-# Prepare data of f & m median bout per nest 
- 
-  # estimate within population slopes
-    # r pearsons
-      dd_n10[n_by_pop>5,  r := cor(med_f, med_m), by = pop]
-      dd_n10[n_by_pop>5 & r<0, r_neg := 'yes']
-      dd_n10[n_by_pop>5 & !r_neg%in%'yes', r_neg := 'no']
-    # rlm
-      dd_n10[n_by_pop>5,  slope_pop := rlm(med_f ~ med_m, weights = n)  %>% coef  %>% magrittr::extract(2), by = pop] 
-      dd_n10[n_by_pop>5 & slope_pop<0, slope_pop_neg := 'yes']
-      dd_n10[n_by_pop>5 & !slope_pop_neg%in%'yes', slope_pop_neg := 'no']
-      dd_n10[n_by_pop>5, slope_pop_certain := simulate_rlm(.SD), by = pop] #x = dd_n10[n_by_pop>10 & !duplicated(pop), ]; summary(factor(x$slope_pop_certain)) 
+#+ f1a fig.width=20*inch,fig.height=13*inch
+  f1a = 
+  ggplot(dd_n10[n_by_sp>10],aes(x = med_m, y = med_f, group = scinam, weight=n)) + 
+      geom_point(aes(size = n, col = suborder), alpha = 0.5)+#geom_point(size = 0.5, alpha = 0.5) + 
+      geom_smooth(method = 'rlm', se = FALSE,  col = 'grey40', aes(lwd = slope_sp_certain))+ #linewidth = size_l,alpha = 0.2,
+      geom_abline(intercept = 0, slope = 1, lty =3, col = 'red')+
+      ggpubr::stat_cor(method="pearson",size = 2, cor.coef.name = 'r',aes(x = med_m, y = med_f, label = ..r.label..), inherit.aes = FALSE) +
 
-  # estimate within species slopes
-      # r pearsons
-      dd_n10[n_by_sp>5,  r_sp := cor(med_f, med_m), by = scinam]
-      dd_n10[n_by_sp>5 & r_sp<0, r_sp_neg := 'yes']
-      dd_n10[n_by_sp>5 & !r_sp_neg%in%'yes', r_sp_neg := 'no']
+      scale_color_manual(values=c(male, female), name = "Suborder")+ 
+      scale_linewidth_manual(values=c(.25, size_l), name = "Slope certain")+ 
+      scale_size(name = "Number of bouts") + 
+      #scale_size(breaks = c(1,15,30), name = 'n days') +
 
-    # rlm
-      dd_n10[n_by_sp>5,  slope_sp := rlm(med_f ~ med_m, weights = n)  %>% coef  %>% magrittr::extract(2), by = scinam] 
-      dd_n10[n_by_sp>5 & slope_sp<0, slope_sp_neg := 'yes']
-      dd_n10[n_by_sp>5 & !slope_sp_neg%in%'yes', slope_sp_neg := 'no']
-      dd_n10[n_by_sp>5, slope_sp_certain := simulate_rlm(.SD), by = scinam]
-   
+      #stat_cor(aes(label = ..r.label..),  label.x = 3, size = 2) + 
+      #facet_wrap(~pop) +
+      #coord_cartesian(xlim = c(0, 16),ylim = c(0, 16)) +
+      scale_x_continuous("♂ bout [hours]") +
+      scale_y_continuous("♀ bout [hours]") +
+      labs(subtitle = "A")+
+      facet_wrap(~scinam, ncol = 6, scales = "free") + 
+      theme_MB + 
+      theme(strip.background = element_blank())
+
+  # add inset
+    adding_inset <- function (grob, xmin = -Inf, xmax = Inf, ymin = -Inf, ymax = Inf, data){
+      layer(data = data, stat = StatIdentity, position = PositionIdentity, 
+            geom = ggplot2:::GeomCustomAnn,
+            inherit.aes = TRUE, params = list(grob = grob, 
+                                              xmin = xmin, xmax = xmax, 
+                                              ymin = ymin, ymax = ymax))
+    }
+    inset_dunl =
+      ggplot(dd_n10[n_by_pop>10 & scinam == 'Calidris alpina'],aes(x = med_m, y = med_f, group = pop, weight=n)) + 
+        geom_smooth(method = 'rlm', se = FALSE, col = 'grey40', aes(lwd = slope_pop_certain))+
+        scale_linewidth_manual(values=c(.25, size_l), name = "Slope certain") +
+        guides(lwd="none") + 
+        geom_abline(intercept = 0, slope = 1, lty =3, col = 'red')+
+        theme_void() +
+        theme(panel.border = element_rect(colour="grey80", linewidth=0.15, fill = NA))
+
+    inset_sesa = 
+      ggplot(dd_n10[n_by_pop>10 & scinam == 'Calidris pusilla'],aes(x = med_m, y = med_f, group = pop, weight=n)) + 
+        geom_smooth(method = 'rlm', se = FALSE, col = 'grey40', aes(lwd = slope_pop_certain))+
+        scale_linewidth_manual(values=c(.25, size_l), name = "Slope certain") +
+        guides(lwd="none") + 
+        geom_abline(intercept = 0, slope = 1, lty =3, col = 'red')+
+        theme_void() +
+        theme(panel.border = element_rect(colour="grey80", linewidth=0.15, fill = NA))
+
+    inset_kepl = 
+      ggplot(dd_n10[n_by_pop>10 & scinam == "Charadrius alexandrinus"],aes(x = med_m, y = med_f, group = pop, weight=n)) + 
+        geom_smooth(method = 'rlm', se = FALSE, col = 'grey40', aes(lwd = slope_pop_certain))+
+        scale_linewidth_manual(values=c(.25, size_l), name = "Slope certain") +
+        guides(lwd="none") + 
+        geom_abline(intercept = 0, slope = 1, lty =3, col = 'red')+
+        theme_void() +
+        theme(panel.border = element_rect(colour="grey80", linewidth=0.15, fill = NA))
+    
+    inset_amgp =
+      ggplot(dd_n10[n_by_pop>10 & scinam == "Pluvialis dominica"],aes(x = med_m, y = med_f, group = pop, weight=n)) + 
+        geom_smooth(method = 'rlm', se = FALSE, col = 'grey40', aes(lwd = slope_pop_certain))+
+        scale_linewidth_manual(values=c(.25, size_l), name = "Slope certain") +
+        guides(lwd="none") + 
+        geom_abline(intercept = 0, slope = 1, lty =3, col = 'red')+
+        theme_void() +
+        theme(panel.border = element_rect(colour="grey80", linewidth=0.15, fill = NA))
+
+    ann_text <- data.frame(
+      med_m  = ggplot_build(f1a)$layout$panel_params[[2]]$x.range[2]-(ggplot_build(f1a)$layout$panel_params[[2]]$x.range[2]-ggplot_build(f1a)$layout$panel_params[[2]]$x.range[1])*0.4, 
+      med_f = ggplot_build(f1a)$layout$panel_params[[2]]$y.range[1]+(ggplot_build(f1a)$layout$panel_params[[2]]$y.range[2]-ggplot_build(f1a)$layout$panel_params[[2]]$y.range[1])*0.4,lab = "Populations",
+      scinam = factor('Calidris alpina',levels = dd_n10[n_by_pop>10, levels(factor(scinam))]),
+      n = 1)
+
+    f1a_ = 
+    f1a +
+    adding_inset(
+        grob=ggplotGrob(inset_dunl), 
+        data = dd_n10[n_by_pop>10 & scinam == 'Calidris alpina'],
+        ymin = ggplot_build(f1a)$layout$panel_params[[2]]$y.range[1], 
+        ymax= ggplot_build(f1a)$layout$panel_params[[2]]$y.range[1]+(ggplot_build(f1a)$layout$panel_params[[2]]$y.range[2]-ggplot_build(f1a)$layout$panel_params[[2]]$y.range[1])*0.4, 
+        xmin=ggplot_build(f1a)$layout$panel_params[[2]]$x.range[2]-(ggplot_build(f1a)$layout$panel_params[[2]]$x.range[2]-ggplot_build(f1a)$layout$panel_params[[2]]$x.range[1])*0.4, 
+        xmax=ggplot_build(f1a)$layout$panel_params[[2]]$x.range[2])   +
+    adding_inset(
+        grob=ggplotGrob(inset_sesa), 
+        data = dd_n10[n_by_pop>10 & scinam == 'Calidris pusilla'],
+        ymin = ggplot_build(f1a)$layout$panel_params[[5]]$y.range[1], 
+        ymax=ggplot_build(f1a)$layout$panel_params[[5]]$y.range[1]+(ggplot_build(f1a)$layout$panel_params[[5]]$y.range[2]-ggplot_build(f1a)$layout$panel_params[[5]]$y.range[1])*0.4, 
+        xmin=ggplot_build(f1a)$layout$panel_params[[5]]$x.range[2]-(ggplot_build(f1a)$layout$panel_params[[5]]$x.range[2]-ggplot_build(f1a)$layout$panel_params[[5]]$x.range[1])*0.4, 
+        xmax=ggplot_build(f1a)$layout$panel_params[[5]]$x.range[2]) +
+    adding_inset(
+        grob=ggplotGrob(inset_kepl), 
+        data = dd_n10[n_by_pop>10 & scinam == 'Charadrius alexandrinus'],
+        ymin = ggplot_build(f1a)$layout$panel_params[[6]]$y.range[1], 
+        ymax=ggplot_build(f1a)$layout$panel_params[[6]]$y.range[1]+(ggplot_build(f1a)$layout$panel_params[[6]]$y.range[2]-ggplot_build(f1a)$layout$panel_params[[6]]$y.range[1])*0.4, 
+        xmin=ggplot_build(f1a)$layout$panel_params[[6]]$x.range[2]-(ggplot_build(f1a)$layout$panel_params[[6]]$x.range[2]-ggplot_build(f1a)$layout$panel_params[[6]]$x.range[1])*0.4, 
+        xmax=ggplot_build(f1a)$layout$panel_params[[6]]$x.range[2]) +
+    adding_inset(
+        grob=ggplotGrob(inset_amgp), 
+        data = dd_n10[n_by_pop>10 & scinam == 'Pluvialis dominica'],
+        ymin = ggplot_build(f1a)$layout$panel_params[[15]]$y.range[1], 
+        ymax=ggplot_build(f1a)$layout$panel_params[[15]]$y.range[1]+(ggplot_build(f1a)$layout$panel_params[[15]]$y.range[2]-ggplot_build(f1a)$layout$panel_params[[15]]$y.range[1])*0.4, 
+        xmin=ggplot_build(f1a)$layout$panel_params[[15]]$x.range[2]-(ggplot_build(f1a)$layout$panel_params[[15]]$x.range[2]-ggplot_build(f1a)$layout$panel_params[[15]]$x.range[1])*0.4, 
+        xmax=ggplot_build(f1a)$layout$panel_params[[15]]$x.range[2]) +
+    geom_text(data = ann_text,label = "Populations", size = 1.8, hjust = 0, vjust = 0, col = 'grey30')    
+    f1a_
+    
+  if (save_plot == TRUE) {
+      ggsave(file = here::here("Output/Fig_1a_v2.png"), f1a_, width = 20, height = 10, units = "cm", bg = "white")
+      }  #dev.new(width = 20*inch, height = 10*inch)    
+
+#' #### Across evolutionary history 
+require("ggtext")
+require('ggtree')
+library('ggimage')
+library('magick')
+font_size = 2.5
+ladderize_ = TRUE
+source(here::here("R/z_offspring.R"))
+source(here::here("R/z_as-tibble.R"))
+source(here::here("R/z_ancestor.R"))
+add_class <- function(x, name) {
+    xx <- setdiff(name, class(x))
+    if (length(xx) > 0) {
+        class(x) <- base::union(xx, class(x))
+    }
+    return(x)
+}
+
+getnode <- function(...) {
+    if (hasArg(env)) {
+        env <- list(...)$env
+    } else {
+        env <- get("last_plot.phylo", envir = .PlotPhyloEnv)
+    }
+    xy <- unlist(locator(n = 1))
+    points(xy[1], xy[2]) 
+    d <- sqrt((xy[1] - env$xx)^2 + (xy[2] - env$yy)^2)
+    ii <- which(d == min(d))[1]
+    ii
+}
+
+
+# prepare colors
+cols_f1 <- rev(c(brewer.pal(11, "Spectral")[1], brewer.pal(11, "Spectral")[4], brewer.pal(11, "Spectral")[7:11]))
+
+# prepare data and tree
+ds = dd_n10[n_by_sp>10]
+ds = ds[, cor(med_f, med_m), by = list(scinam, animal)]  %>% setnames(old = 'V1', new = 'r')
+ds = merge(ds, dd_n10[!duplicated(scinam), .(scinam,n_by_sp)])
+    #summary(ds); summary(ds[!scinam%in%'Limosa lapponica'])
+ds[, genus:=sub("\\_.*", "", animal)]
+
+   # DELETE sp_r=data.frame(ds[,c("r","scinam")])
+   # DELETE tree_r = drop.tip(tree, tree$tip.label[!tree$tip.label%in%sp_r$scinam])
+
+if (ladderize_ == FALSE) {
+    treei <- drop.tip(tree, setdiff(tree$tip.label, ds$scinam))
+} else {
+   treei <- drop.tip(tree, setdiff(tree$tip.label, ds$scinam)) %>% ladderize(right =TRUE)
+}
+
+
+# reconstrunct ancestral state using phytools
+colelab <- ds$r
+names(colelab) <- ds$scinam
+fit <- phytools::fastAnc(treei, colelab, vars = FALSE, CI = FALSE)
+nd <- data.table(node = names(fit), trait = as.numeric(fit)) 
+td <- data.table(node = ggtree::nodeid(treei, names(colelab)), trait = colelab)
+ptr <- rbind(td, nd)
+ptr[, node := as.numeric(node)]
+treei_c <- dplyr::full_join(treei, ptr, by = "node")
+
+# prepare phylogenetic contrasts
+r_pear=ds$r
+names(r_pear)=ds$scinam
+yourPics <- pic(x=r_pear, phy=treei)
+
+contrast_data <- data.table(
+  node = (Ntip(treei) + 1):(Ntip(treei) + Nnode(treei)),
+  pic = yourPics
+)
+
+treei_c <- treei_c %>%
+  left_join(contrast_data, by = "node")
+
+# prepare genera images
+images = data.table(image = list.files(
+    path = here::here("Illustrations/for_tree/"), 
+    pattern = "\\.png$", full.names = TRUE),
+    genus = sub("\\_.*", "", list.files(path = "Illustrations/for_tree/", pattern = "\\.png$", 
+    full.names = FALSE)),
+    genus_y = c(4.5,2.5,13, 15.5,9,11,17.5, 6.5),
+    genus_x = 105,
+    col = c("lightgrey","lightgrey","darkgrey", "lightgrey", "darkgrey", "lightgrey", "darkgrey", "lightgrey"),
+    width_tree = c(0.9, 0.88, 0.83, 1.2, 1.1, 1.12, 0.75,0.87),
+    #width_tree = c(0.9, 0.85, 0.8, 1.2, 1.1, 1.08,0.9,0.91),
+    #width_tree = c(0.9, 0.72, 0.6, 1.67, 1.52, 1.6,0.8,1.07),
+    bird_size = c(23.5, 19, 15.5,43.75, 39.75, 42, 26, 28)
+    )
+images$width = image_info(image_read(images$image))$width 
+images$height = image_info(image_read(images$image))$height 
+
+
+# add node indentifiers for vertical genus bars 
+treeid <- data.table(as_tibble(tidytree::as.treedata(treei)))
+treeid[, genus:=sub("\\ .*", "", label)]
+nod = treeid[, min(parent), genus] %>% setnames(c('V1'),c('node'))
+images = merge(images, nod)
+images[, name := NA]
+images[genus=='Numenius', node := 1]
+images[genus=='Arenaria', node := 7]
+
+#default_size <- ggplot2:::check_subclass("point", "Geom")$default_aes$size
+
+# plot tree
+#TODO:use scale_size_identity() and in geom_point multiply by 20-25 or multiply geom point by 10 only and use scale_size with range?
+p <- ggtree::ggtree(treei_c, ladderize = ladderize_, right = TRUE) + #layout = "circular", 
+    geom_tree(aes(color = trait), continuous = "colour", size = 1) +
+    geom_tiplab(offset = 0.5, fontface = "italic", colour = "grey30", size = 2.35)+
+    scale_color_gradientn(colours = (cols_f1), name = "Assortative mating") +
+    geom_image(data = images, 
+             aes(
+                x = genus_x, y = genus_y, image = image, size = I(width_tree/10)), by='width')+#, size = 0.1) +#inherit.aes = FALSE) +  # Adjust x and size as needed #, by = "width" 
+    geom_point(data = data.frame(x = 97.5, y = c(5)), aes(x =x, y = y), color = "darkgrey", shape = 15, size = 1) +
+    geom_point(data = data.frame(x = 97.5, y = c(11)), aes(x =x, y = y), color = "lightgrey", shape = 15, size = 1) +
+    geom_point(
+            aes(x = x, y = y, size = abs(pic)), #sqrt(abs(pic/pi))),
+            fill = "grey90", color = "grey50", pch = 21) +
+    #scale_size_identity()+
+    scale_size(range = c(0.1,2.5))+
+    coord_cartesian(xlim = c(0,110))+
+    guides(size = "none") + 
+    #labs(tag = '(b)') +
+    #theme_tree2()+
+    theme_MB + 
+    theme(  legend.position="none",
+            panel.border = element_blank()
+        #legend.title = element_text(face = "bold", hjust = 0.5),
+        #plot.margin = unit(c(0,0, 0, 0), "cm"),
+        #plot.tag = element_text(size = 9)    
+    )
+
+p_g = p
+
+# add genus lines
+for (j in images$genus) {
+    # j = 'Arenaria'
+    ij <- images[genus == j]
+    # p_l <- p_l + geom_cladelabel(node = cj$Node, label = cj$Label, color = c(cj$col, "black"), align = TRUE, barsize = 1.5)
+    p_g <-
+        p_g +
+        ggtree::geom_cladelabel(node = ij$node, label = ij$name, color = c(ij$col), barsize = 1, offset = 34.5,fontsize = font_size) # angle = "auto")#
+    # ggtree::geom_cladelab(node = c_s$Node, label = c_s$Label, barcolor = c_s$col, textcolor = sub_t, align = TRUE, barsize = 2, hjust = "left", offset.text = 6)
+    # ggsave(here::here(glue('Output/temp_phylo_lader_{j}.png')))
+    # print(j)
+}
+
+p_g
+
+# use this to add horizontal lines
+#p_g = p_g + geom_tiplab(aes(subset = (node %in% c(1)), label = ""), offset = 27, color = "lightgrey", align = TRUE, linetype = 1, vjust = 1, linesize = font_size) # treeid[treeid$label == 'xenicus_gilviventris','label']
+
+
+# add scale 
+qn <- scales::rescale(quantile(ds$r), probs = seq(0, 1, length.out = length(cols_f1)))
+
+dens <- density(ds$r, n = 2^12)
+den <- data.table(x = dens$x, y = dens$y)
+#den <- den[x > log10(0.99) & x < log10(50.01)]
+
+f1b_l <-
+    ggplot() +
+    geom_segment(data = den, aes(x, y, xend = x, yend = 0, colour = x)) +
+    scale_color_gradientn(
+        colours = cols_f1, # viridis(10),
+        values = qn # c(0, seq(qn01[1], qn01[2], length.out = 18), 1)
+    ) +
+    geom_vline(xintercept = median(ds$r), lty =3, linewidth = 0.5, color = 'red')+
+    #geom_line(data = den_o, aes(x = x, y = y), color = osc) +
+    #geom_line(data = den_s, aes(x = x, y = y), color = sub) +
+    # geom_segment(data = den_s, aes(x, y, xend = x, yend = 0)) +
+    # geom_segment(data = den_s, aes(x, y, xend = x, yend = 0)) +
+    # ggplot() +
+    # geom_density(data = d, aes(x = log10(element_types_extrapol_mean), col = clade))+
+    # geom_density(data = d, aes(x = log10(element_types_extrapol_mean)))
+    # geom_line(data = den_o, aes(x =x, y = y), color = osc) +
+    # geom_line(data = den_s, aes(x =x, y = y), color = sub) +
+    scale_x_continuous(breaks = c(0, 0.5, 1), labels = c('0','0.5','1')) +
+    scale_y_continuous(expand = c(0,0)) +
+    ylab("") +
+    xlab("Pearson's r\n [for ♀ & ♂ median nest bout]") +
+    theme_bw() +
+    theme(
+        text = element_text(family = fam),
+        legend.position = "none",
+        axis.line.x = element_line(color = ax_lines, linewidth = 0.25),
+        panel.grid.major = element_blank(), # panel.grid.major = element_line(size = 0.25),
+        panel.grid.minor = element_blank(), # element_line(size = 0.25),
+        # panel.border = element_rect(size=0.25),
+        panel.border = element_blank(),
+        # axis.line.x.bottom = element_line(color = ax_lines, size = 0.25),
+        # axis.line.y.left   = element_line(color = ax_lines, size = 0.25),
+        axis.ticks.length = unit(1, "pt"), # axis.ticks.length=unit(.05, "cm"),
+        axis.ticks = element_line(linewidth = 0.25, color = ax_lines),
+        # plot.tag.position = c(0.96, 0.96),
+        # plot.tag = element_text(size = 7.5), # size = 10
+        axis.text = element_text(size = 6),
+        axis.title = element_text(size = 7, colour="grey30"),
+        axis.line.y = element_blank(), axis.text.y = element_blank(),
+        axis.ticks.y = element_blank(), axis.title.y = element_blank(),
+        plot.background = element_rect(fill = "transparent", colour = NA)
+    )
+
+# merge
+f2_tree = p_g + theme(legend.position = "none") + inset_element(f1b_l, 
+left = 0.10, right = 0.30,
+bottom = 0.03, top = 0.308, 
+on_top = TRUE, align_to = "full")
+
+# export
+ggsave(here::here("Output/Fig_tree_v7_ss.png"), f2_tree, width = 11, height = 10, units ='cm')
+
+# remove white space and reexport
+x <- image_read(here::here("Output/Fig_tree_v7_ss.png"), density=300)
+y <- image_trim(x)
+image_write(y, path = "Output/Fig_tree_v7_ss_trim.png", format = "png", density = 300)
+
+image_ggplot(y)
+
+
+# OLD   
 #+ f1 fig.width=9*inch,fig.height=5*1.95*inch
   # f1
   f1a =
@@ -273,115 +604,7 @@ knitr::opts_chunk$set(message = FALSE, warning = FALSE, cache = TRUE)
   #' 
   #' <br> 
   #' 
-  #+ fs2 fig.width=20*inch,fig.height=13*inch
-  f1a = 
-  ggplot(dd_n10[n_by_sp>10],aes(x = med_m, y = med_f, group = scinam, weight=n)) + 
-      geom_point(aes(size = n, col = suborder), alpha = 0.5)+#geom_point(size = 0.5, alpha = 0.5) + 
-      geom_smooth(method = 'rlm', se = FALSE,  col = 'grey40', aes(lwd = slope_sp_certain))+ #linewidth = size_l,alpha = 0.2,
-      geom_abline(intercept = 0, slope = 1, lty =3, col = 'red')+
-      ggpubr::stat_cor(method="pearson",size = 2, cor.coef.name = 'r',aes(x = med_m, y = med_f, label = ..r.label..), inherit.aes = FALSE) +
-
-      scale_color_manual(values=c(male, female), name = "Suborder")+ 
-      scale_linewidth_manual(values=c(.25, size_l), name = "Slope certain")+ 
-      scale_size(name = "Number of bouts") + 
-      #scale_size(breaks = c(1,15,30), name = 'n days') +
-
-      #stat_cor(aes(label = ..r.label..),  label.x = 3, size = 2) + 
-      #facet_wrap(~pop) +
-      #coord_cartesian(xlim = c(0, 16),ylim = c(0, 16)) +
-      scale_x_continuous("♂ bout [hours]") +
-      scale_y_continuous("♀ bout [hours]") +
-      labs(subtitle = "A")+
-      facet_wrap(~scinam, ncol = 6, scales = "free") + 
-      theme_MB + 
-      theme(strip.background = element_blank())
-
-  # add inset
-    adding_inset <- function (grob, xmin = -Inf, xmax = Inf, ymin = -Inf, ymax = Inf, data){
-      layer(data = data, stat = StatIdentity, position = PositionIdentity, 
-            geom = ggplot2:::GeomCustomAnn,
-            inherit.aes = TRUE, params = list(grob = grob, 
-                                              xmin = xmin, xmax = xmax, 
-                                              ymin = ymin, ymax = ymax))
-    }
-    inset_dunl =
-      ggplot(dd_n10[n_by_pop>10 & scinam == 'Calidris alpina'],aes(x = med_m, y = med_f, group = pop, weight=n)) + 
-        geom_smooth(method = 'rlm', se = FALSE, col = 'grey40', aes(lwd = slope_pop_certain))+
-        scale_linewidth_manual(values=c(.25, size_l), name = "Slope certain") +
-        guides(lwd="none") + 
-        geom_abline(intercept = 0, slope = 1, lty =3, col = 'red')+
-        theme_void() +
-        theme(panel.border = element_rect(colour="grey80", linewidth=0.15, fill = NA))
-
-    inset_sesa = 
-      ggplot(dd_n10[n_by_pop>10 & scinam == 'Calidris pusilla'],aes(x = med_m, y = med_f, group = pop, weight=n)) + 
-        geom_smooth(method = 'rlm', se = FALSE, col = 'grey40', aes(lwd = slope_pop_certain))+
-        scale_linewidth_manual(values=c(.25, size_l), name = "Slope certain") +
-        guides(lwd="none") + 
-        geom_abline(intercept = 0, slope = 1, lty =3, col = 'red')+
-        theme_void() +
-        theme(panel.border = element_rect(colour="grey80", linewidth=0.15, fill = NA))
-
-    inset_kepl = 
-      ggplot(dd_n10[n_by_pop>10 & scinam == "Charadrius alexandrinus"],aes(x = med_m, y = med_f, group = pop, weight=n)) + 
-        geom_smooth(method = 'rlm', se = FALSE, col = 'grey40', aes(lwd = slope_pop_certain))+
-        scale_linewidth_manual(values=c(.25, size_l), name = "Slope certain") +
-        guides(lwd="none") + 
-        geom_abline(intercept = 0, slope = 1, lty =3, col = 'red')+
-        theme_void() +
-        theme(panel.border = element_rect(colour="grey80", linewidth=0.15, fill = NA))
-    
-    inset_amgp =
-      ggplot(dd_n10[n_by_pop>10 & scinam == "Pluvialis dominica"],aes(x = med_m, y = med_f, group = pop, weight=n)) + 
-        geom_smooth(method = 'rlm', se = FALSE, col = 'grey40', aes(lwd = slope_pop_certain))+
-        scale_linewidth_manual(values=c(.25, size_l), name = "Slope certain") +
-        guides(lwd="none") + 
-        geom_abline(intercept = 0, slope = 1, lty =3, col = 'red')+
-        theme_void() +
-        theme(panel.border = element_rect(colour="grey80", linewidth=0.15, fill = NA))
-
-    ann_text <- data.frame(
-      med_m  = ggplot_build(f1a)$layout$panel_params[[2]]$x.range[2]-(ggplot_build(f1a)$layout$panel_params[[2]]$x.range[2]-ggplot_build(f1a)$layout$panel_params[[2]]$x.range[1])*0.4, 
-      med_f = ggplot_build(f1a)$layout$panel_params[[2]]$y.range[1]+(ggplot_build(f1a)$layout$panel_params[[2]]$y.range[2]-ggplot_build(f1a)$layout$panel_params[[2]]$y.range[1])*0.4,lab = "Populations",
-      scinam = factor('Calidris alpina',levels = dd_n10[n_by_pop>10, levels(factor(scinam))]),
-      n = 1)
-
-    f1a_ = 
-    f1a +
-    adding_inset(
-        grob=ggplotGrob(inset_dunl), 
-        data = dd_n10[n_by_pop>10 & scinam == 'Calidris alpina'],
-        ymin = ggplot_build(f1a)$layout$panel_params[[2]]$y.range[1], 
-        ymax= ggplot_build(f1a)$layout$panel_params[[2]]$y.range[1]+(ggplot_build(f1a)$layout$panel_params[[2]]$y.range[2]-ggplot_build(f1a)$layout$panel_params[[2]]$y.range[1])*0.4, 
-        xmin=ggplot_build(f1a)$layout$panel_params[[2]]$x.range[2]-(ggplot_build(f1a)$layout$panel_params[[2]]$x.range[2]-ggplot_build(f1a)$layout$panel_params[[2]]$x.range[1])*0.4, 
-        xmax=ggplot_build(f1a)$layout$panel_params[[2]]$x.range[2])   +
-    adding_inset(
-        grob=ggplotGrob(inset_sesa), 
-        data = dd_n10[n_by_pop>10 & scinam == 'Calidris pusilla'],
-        ymin = ggplot_build(f1a)$layout$panel_params[[5]]$y.range[1], 
-        ymax=ggplot_build(f1a)$layout$panel_params[[5]]$y.range[1]+(ggplot_build(f1a)$layout$panel_params[[5]]$y.range[2]-ggplot_build(f1a)$layout$panel_params[[5]]$y.range[1])*0.4, 
-        xmin=ggplot_build(f1a)$layout$panel_params[[5]]$x.range[2]-(ggplot_build(f1a)$layout$panel_params[[5]]$x.range[2]-ggplot_build(f1a)$layout$panel_params[[5]]$x.range[1])*0.4, 
-        xmax=ggplot_build(f1a)$layout$panel_params[[5]]$x.range[2]) +
-    adding_inset(
-        grob=ggplotGrob(inset_kepl), 
-        data = dd_n10[n_by_pop>10 & scinam == 'Charadrius alexandrinus'],
-        ymin = ggplot_build(f1a)$layout$panel_params[[6]]$y.range[1], 
-        ymax=ggplot_build(f1a)$layout$panel_params[[6]]$y.range[1]+(ggplot_build(f1a)$layout$panel_params[[6]]$y.range[2]-ggplot_build(f1a)$layout$panel_params[[6]]$y.range[1])*0.4, 
-        xmin=ggplot_build(f1a)$layout$panel_params[[6]]$x.range[2]-(ggplot_build(f1a)$layout$panel_params[[6]]$x.range[2]-ggplot_build(f1a)$layout$panel_params[[6]]$x.range[1])*0.4, 
-        xmax=ggplot_build(f1a)$layout$panel_params[[6]]$x.range[2]) +
-    adding_inset(
-        grob=ggplotGrob(inset_amgp), 
-        data = dd_n10[n_by_pop>10 & scinam == 'Pluvialis dominica'],
-        ymin = ggplot_build(f1a)$layout$panel_params[[15]]$y.range[1], 
-        ymax=ggplot_build(f1a)$layout$panel_params[[15]]$y.range[1]+(ggplot_build(f1a)$layout$panel_params[[15]]$y.range[2]-ggplot_build(f1a)$layout$panel_params[[15]]$y.range[1])*0.4, 
-        xmin=ggplot_build(f1a)$layout$panel_params[[15]]$x.range[2]-(ggplot_build(f1a)$layout$panel_params[[15]]$x.range[2]-ggplot_build(f1a)$layout$panel_params[[15]]$x.range[1])*0.4, 
-        xmax=ggplot_build(f1a)$layout$panel_params[[15]]$x.range[2]) +
-    geom_text(data = ann_text,label = "Populations", size = 1.8, hjust = 0, vjust = 0, col = 'grey30')    
-    f1a_
-    
-  if (save_plot == TRUE) {
-      ggsave(file = here::here("Output/Fig_1a_v2.png"), f1a_, width = 20, height = 10, units = "cm", bg = "white")
-      }  #dev.new(width = 20*inch, height = 10*inch)    
+  
   #' 
   #' <br> 
   #'     
@@ -414,7 +637,7 @@ knitr::opts_chunk$set(message = FALSE, warning = FALSE, cache = TRUE)
     yourPics <- pic(x=r_pear, phy=tree_r_l)
 
   # plot
-    if(save_plot==TRUE){png(here::here("Output/Fig_2_width-64mm_v2.png"), width=2.5,height=3.5,units="in",res=600)} else {
+    if(save_plot==TRUE){png(here::here("Output/Fig_2_width-64mm_v2_Liam.png"), width=2.5,height=3.5,units="in",res=600)} else {
     dev.new(width=2.3,height=3.5)}
 
     #save(file='freeze/Data/for_Liam.Rdata', objr)

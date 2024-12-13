@@ -1,5 +1,4 @@
-#TODO:adjust size of the phylo contrasts (see nature papeer) 
-#TODO:adjust font size to fit the other figure
+#TODO:adjust position of the densityplot and try the fig without (b) tag lable to see whether it fits better on the page
 
 require("ggtext")
 require('ggtree')
@@ -31,19 +30,26 @@ getnode <- function(...) {
     ii
 }
 
-ds[, genus:=sub("\\_.*", "", animal)]
 
 # prepare colors
 cols_f1 <- rev(c(brewer.pal(11, "Spectral")[1], brewer.pal(11, "Spectral")[4], brewer.pal(11, "Spectral")[7:11]))
 
-# prepare tree
+# prepare data and tree
+ds = dd_n10[n_by_sp>10]
+ds = ds[, cor(med_f, med_m), by = list(scinam, animal)]  %>% setnames(old = 'V1', new = 'r')
+ds = merge(ds, dd_n10[!duplicated(scinam), .(scinam,n_by_sp)])
+    #summary(ds); summary(ds[!scinam%in%'Limosa lapponica'])
+ds[, genus:=sub("\\_.*", "", animal)]
+
+   # DELETE sp_r=data.frame(ds[,c("r","scinam")])
+   # DELETE tree_r = drop.tip(tree, tree$tip.label[!tree$tip.label%in%sp_r$scinam])
+
 if (ladderize_ == FALSE) {
-    treei <- drop.tip(tree_r, setdiff(tree$tip.label, d$scinam))
+    treei <- drop.tip(tree, setdiff(tree$tip.label, ds$scinam))
 } else {
-    treei <- drop.tip(tree, setdiff(tree$tip.label, ds$animal)) %>% ladderize(right =TRUE)
+   treei <- drop.tip(tree, setdiff(tree$tip.label, ds$scinam)) %>% ladderize(right =TRUE)
 }
 
-treei$tip.label = gsub("_", " ", treei$tip.label)
 
 # reconstrunct ancestral state using phytools
 colelab <- ds$r
@@ -67,8 +73,6 @@ contrast_data <- data.table(
 
 treei_c <- treei_c %>%
   left_join(contrast_data, by = "node")
-  
-
 
 # prepare genera images
 images = data.table(image = list.files(
@@ -77,7 +81,7 @@ images = data.table(image = list.files(
     genus = sub("\\_.*", "", list.files(path = "Illustrations/for_tree/", pattern = "\\.png$", 
     full.names = FALSE)),
     genus_y = c(4.5,2.5,13, 15.5,9,11,17.5, 6.5),
-    genus_x = 100,
+    genus_x = 105,
     col = c("lightgrey","lightgrey","darkgrey", "lightgrey", "darkgrey", "lightgrey", "darkgrey", "lightgrey"),
     width_tree = c(0.9, 0.88, 0.83, 1.2, 1.1, 1.12, 0.75,0.87),
     #width_tree = c(0.9, 0.85, 0.8, 1.2, 1.1, 1.08,0.9,0.91),
@@ -97,27 +101,33 @@ images[, name := NA]
 images[genus=='Numenius', node := 1]
 images[genus=='Arenaria', node := 7]
 
+#default_size <- ggplot2:::check_subclass("point", "Geom")$default_aes$size
+
 # plot tree
+
 p <- ggtree::ggtree(treei_c, ladderize = ladderize_, right = TRUE) + #layout = "circular", 
     geom_tree(aes(color = trait), continuous = "colour", size = 1) +
-    geom_tiplab(offset = 0.5, fontface = "italic", colour = "darkgrey")+
+    geom_tiplab(offset = 0.5, fontface = "italic", colour = "grey30", size = 2.35)+
     scale_color_gradientn(colours = (cols_f1), name = "Assortative mating") +
     geom_image(data = images, 
              aes(
                 x = genus_x, y = genus_y, image = image, size = I(width_tree/10)), by='width')+#, size = 0.1) +#inherit.aes = FALSE) +  # Adjust x and size as needed #, by = "width" 
-    geom_point(data = data.frame(x = 91.5, y = c(5)), aes(x =x, y = y), color = "darkgrey", shape = 15, size = 1) +
-    geom_point(data = data.frame(x = 91.5, y = c(11)), aes(x =x, y = y), color = "lightgrey", shape = 15, size = 1) +
+    geom_point(data = data.frame(x = 97.5, y = c(5)), aes(x =x, y = y), color = "darkgrey", shape = 15, size = 1) +
+    geom_point(data = data.frame(x = 97.5, y = c(11)), aes(x =x, y = y), color = "lightgrey", shape = 15, size = 1) +
     geom_point(
-            aes(x = x, y = y, size = pic),
+            aes(x = x, y = y, size = sqrt(abs(pic/pi))),
             fill = "grey90", color = "grey50", pch = 21) +
-    coord_cartesian(xlim = c(0,120))+
+    scale_size_area(max_size = 4) +
+    coord_cartesian(xlim = c(0,110))+
     guides(size = "none") + 
-    labs(tag = '(b)') +
+    #labs(tag = '(b)') +
     #theme_tree2()+
-    theme(legend.title = element_text(face = "bold")) +
-    theme(legend.title.align = 0.5,
-    #plot.margin = unit(c(0,0, 0, 0), "cm"),
-    plot.tag = element_text(size = 9)    
+    theme_MB + 
+    theme(  legend.position="none",
+            panel.border = element_blank()
+        #legend.title = element_text(face = "bold", hjust = 0.5),
+        #plot.margin = unit(c(0,0, 0, 0), "cm"),
+        #plot.tag = element_text(size = 9)    
     )
 
 p_g = p
@@ -129,7 +139,7 @@ for (j in images$genus) {
     # p_l <- p_l + geom_cladelabel(node = cj$Node, label = cj$Label, color = c(cj$col, "black"), align = TRUE, barsize = 1.5)
     p_g <-
         p_g +
-        ggtree::geom_cladelabel(node = ij$node, label = ij$name, color = c(ij$col), barsize = 1, offset = 29,fontsize = font_size) # angle = "auto")#
+        ggtree::geom_cladelabel(node = ij$node, label = ij$name, color = c(ij$col), barsize = 1, offset = 34.5,fontsize = font_size) # angle = "auto")#
     # ggtree::geom_cladelab(node = c_s$Node, label = c_s$Label, barcolor = c_s$col, textcolor = sub_t, align = TRUE, barsize = 2, hjust = "left", offset.text = 6)
     # ggsave(here::here(glue('Output/temp_phylo_lader_{j}.png')))
     # print(j)
@@ -165,12 +175,13 @@ f1b_l <-
     # geom_density(data = d, aes(x = log10(element_types_extrapol_mean)))
     # geom_line(data = den_o, aes(x =x, y = y), color = osc) +
     # geom_line(data = den_s, aes(x =x, y = y), color = sub) +
-    scale_x_continuous(breaks = c(0, 0.5, 1), labels = c('0','.5','1')) +
+    scale_x_continuous(breaks = c(0, 0.5, 1), labels = c('0','0.5','1')) +
     scale_y_continuous(expand = c(0,0)) +
     ylab("") +
     xlab("Pearson's r\n [for ♀ & ♂ median nest bout]") +
     theme_bw() +
     theme(
+        text = element_text(family = fam),
         legend.position = "none",
         axis.line.x = element_line(color = ax_lines, linewidth = 0.25),
         panel.grid.major = element_blank(), # panel.grid.major = element_line(size = 0.25),
@@ -184,14 +195,39 @@ f1b_l <-
         # plot.tag.position = c(0.96, 0.96),
         # plot.tag = element_text(size = 7.5), # size = 10
         axis.text = element_text(size = 6),
-        axis.title = element_text(size = 7),
+        axis.title = element_text(size = 7, colour="grey30"),
         axis.line.y = element_blank(), axis.text.y = element_blank(),
-        axis.ticks.y = element_blank(), axis.title.y = element_blank()
+        axis.ticks.y = element_blank(), axis.title.y = element_blank(),
+        plot.background = element_rect(fill = "transparent", colour = NA)
     )
 
 # merge
-f2_tree = p_g + theme(legend.position = "none") + inset_element(f1b_l, left = 0.8, bottom = 0, right = 1, top = 0.275, on_top = TRUE, align_to = "full")
-ggsave(here::here("Output/Fig_2_tree.png"), f2_tree, width = 12, height = 10, units ='cm')
+f2_tree = p_g + theme(legend.position = "none") + inset_element(f1b_l, 
+left = 0.10, right = 0.30,
+bottom = 0.03, top = 0.308, 
+on_top = TRUE, align_to = "full")
 
-ggsave(here::here("Output/Fig_1.png"), gmos / f1b_d + plot_layout(heights = c(7.5, 15)), width = 15, height = 15 + 7.5, units = "cm")
-f1b_d
+ggsave(here::here("Output/Fig_tree_v4.png"), f2_tree, width = 11, height = 10, units ='cm')
+
+library(magick)
+x <- image_read(here::here("Output/Fig_tree_v4.png"), density=300)
+
+image_write(image_trim(x), path = "Output/Fig_tree_v4_trim.png", format = "png", density = 300)
+
+ggsave(here::here("Output/Fig_tree_v4_trim.png"), f2_tree, width = 9.9, height = 9, units ='cm')
+
+ggsave(here::here("Output/Fig_tree_v5.png"), f2_tree, width = 9.9, height = 9, units ='cm', scale=0.9)
+
+
+
+
+x <- image_read(here::here("Output/Fig_tree_v4.png"), density=300)
+y <- image_trim(x)
+panel_border <- theme(panel.border=element_rect(colour='black', 
+                                            fill=NA, size=2))
+xx <- image_ggplot(x) + panel_border
+yy <- image_ggplot(y) + panel_border
+plot_list(xx, yy, tag_levels = "A", ncol=2)
+
+#ggsave(here::here("Output/Fig_1.png"), gmos / f1b_d + plot_layout(heights = c(7.5, 15)), width = 15, height = 15 + 7.5, units = "cm")
+#f1b_d
