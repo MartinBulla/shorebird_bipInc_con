@@ -476,7 +476,7 @@ on_top = TRUE, align_to = "full")
 # export
 ggsave(here::here("Output/Fig_tree_v7_ss.png"), f2_tree, width = 11, height = 10, units ='cm')
 
-# remove white space and reexport
+# remove white space and reexport (the final exported size should be reduced by 10% to 85mm)
 x <- image_read(here::here("Output/Fig_tree_v7_ss.png"), density=300)
 y <- image_trim(x)
 image_write(y, path = "Output/Fig_tree_v7_ss_trim.png", format = "png", density = 300)
