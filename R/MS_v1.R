@@ -159,8 +159,7 @@ a = dd_n10[n_by_sp>10]
 quantile(a$r_sp, probs = c(0.025,0.5,0.975)); mean(a$r_sp) # weighing by number of m-f bouts is meaningless in the cross species context where species differ in bout lengths: 
 wtd.quantile(a$r_sp, a$n_by_sp, probs = c(0.025,0.5,0.975));wtd.mean(a$r_sp, a$n_by_sp) 
 
-#+ f1a fig.width=20*inch,fig.height=13*inch
-  #TODO: change scaling for size legend
+#+ f1 fig.width=20*inch,fig.height=19.5*inch
   f1a = 
   ggplot(dd_n10[n_by_sp>10],aes(x = med_m, y = med_f, group = scinam, weight=n)) + 
       geom_point(aes(size = n, col = suborder), alpha = 0.5)+#geom_point(size = 0.5, alpha = 0.5) + 
@@ -170,7 +169,7 @@ wtd.quantile(a$r_sp, a$n_by_sp, probs = c(0.025,0.5,0.975));wtd.mean(a$r_sp, a$n
 
       scale_color_manual(values=c(male, female), name = "Suborder")+ 
       scale_linewidth_manual(values=c(.25, size_l), name = "Slope certain")+ 
-      scale_size(name = "Number of bouts") + 
+      scale_size(name = "Number of bouts", breaks = c(10, 50, 100, 200, 400)) + 
       #scale_size(breaks = c(1,15,30), name = 'n days') +
 
       #stat_cor(aes(label = ..r.label..),  label.x = 3, size = 2) + 
@@ -274,13 +273,10 @@ wtd.quantile(a$r_sp, a$n_by_sp, probs = c(0.025,0.5,0.975));wtd.mean(a$r_sp, a$n
         xmin=ggplot_build(f1a)$layout$panel_params[[15]]$x.range[2]-(ggplot_build(f1a)$layout$panel_params[[15]]$x.range[2]-ggplot_build(f1a)$layout$panel_params[[15]]$x.range[1])*0.4, 
         xmax=ggplot_build(f1a)$layout$panel_params[[15]]$x.range[2]) +
     geom_text(data = ann_text,label = "Populations", size = 1.8, hjust = 0, vjust = 0, col = 'grey30')    
-    f1a_
-    
-  if (save_plot == TRUE) {
-      ggsave(file = here::here("Output/Fig_1A_width-180mm.png"), f1a_, width = 20, height = 10, units = "cm", bg = "white")
-      }  #dev.new(width = 20*inch, height = 10*inch)  
 
-#+ f1b fig.width=10*inch,fig.height=10*inch
+  #export ggsave(file = here::here("Output/Fig_1A_width-180mm.png"), f1a_, width = 20, height = 10, units = "cm")
+
+# f1b fig.width=10*inch,fig.height=10*inch
 f1b =
     ggplot(dd_n10[n_by_sp>10],aes(x = med_m, y = med_f, group = sp, weight=n, color = suborder)) + 
       #geom_point(aes(size = n), alpha = 0.5)+#geom_point(size = 0.5, alpha = 0.5) + 
@@ -308,10 +304,9 @@ f1b =
             #plot.background = element_rect(fill = "transparent",
                             #  colour = NA_character_) # necessary to avoid drawing plot outline
       )
-  if (save_plot == TRUE) {
-      ggsave(file = here::here("Output/Fig_1B_width-90mm.png"), f1b, width = 6.6, height = 6.7, units = "cm", bg = "white")
-      }  #dev.new(width = 20*inch, height = 10*inch)  
-#+ f1c fig.width=10*inch,fig.height=10*inch
+  #export ggsave(file = here::here("Output/Fig_1B_width-90mm.png"), f1b, width = 6.6, height = 6.7, units = "cm")
+
+# f1c fig.width=10*inch,fig.height=10*inch
 require("ggtext")
 require('ggtree')
 library('ggimage')
@@ -460,7 +455,7 @@ for (j in images$genus) {
     # print(j)
 }
 
-p_g
+#p_g
 
 # use this to add horizontal lines
 #p_g = p_g + geom_tiplab(aes(subset = (node %in% c(1)), label = ""), offset = 27, color = "lightgrey", align = TRUE, linetype = 1, vjust = 1, linesize = font_size) # treeid[treeid$label == 'xenicus_gilviventris','label']
@@ -522,31 +517,9 @@ left = 0.10, right = 0.30,
 bottom = 0.03, top = 0.308, 
 on_top = TRUE, align_to = "full")
 
-# export
-ggsave(here::here("Output/Fig_tree_v7_ss.png"), f1c, width = 11, height = 10, units ='cm')
-
-# remove white space and reexport (the final exported size should be reduced by 10% to 85mm)
-x <- image_read(here::here("Output/Fig_tree_v7_ss.png"), density=300)
-y <- image_trim(x) # width = 94.5cm, height = 88
-image_write(y, path = "Output/Fig_1C_width-85mm.png", format = "png", density = 300)
+# export ggsave(here::here("Output/Fig_1c.png"), f1c, width = 11, height = 10, units ='cm')
 
 # combine f1a, f1b, f1c with grid arrange
-# v1
-blank = ggplot() + theme_void() 
-f1b_b = ggarrange(
-    blank, f1b,blank,
-    nrow=3, heights=c(0.4,6.7,2.9), align = 'v'
-    )
-f1bc = ggarrange(
-    f1b_b,blank, f1c, 
-    ncol=3, widths=c(6.6,2.4,11), align = 'h'
-    )
-f1abc = ggarrange(
-    f1a,f1bc,
-    nrow=2, heights=c(9.5,10), align = 'v'
-    )
-ggsave(here::here("Output/Fig_1_width-180mm.png"), f1abc, width = 20, height = 19.7, units ='cm', bg='white')
-# v2
 blank = ggplot() + theme_void() 
 f1b_b = ggarrange(
     blank, f1b,blank,
@@ -560,8 +533,19 @@ f1abc = ggarrange(
     f1a,f1bc,
     nrow=2, heights=c(9.5,10), align = 'v'
     )
-ggsave(here::here("Output/Fig_1_width-180mm_v2.png"), f1abc, width = 20, height = 19.7, units ='cm', bg='white')
+if (save_plot == TRUE) {
+ggsave(here::here("Output/Fig_1_width-180mm.png"), f1abc, width = 20, height = 19.7, units ='cm', bg='white')
+x <- image_read(here::here("Output/Fig_1_width-180mm.png"), density=300)
+y <- image_trim(x) # width = 94.5cm, height = 88
+image_write(y, path = "Output/Fig_1_width-178mm_trimmed.png", format = "png", density = 300)
 
+1181/100 
+
+} #TODO:use magigc to reduce white space
+
+f1abc
+
+#TODO:START HERE
 # OLD   
 #+ f1 fig.width=9*inch,fig.height=5*1.95*inch
   # f1

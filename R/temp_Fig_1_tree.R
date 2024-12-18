@@ -1,3 +1,8 @@
+# remove white space and reexport (the final exported size should be reduced by 10% to 85mm)
+    #x <- image_read(here::here("Output/Fig_tree_v7_ss.png"), density=300)
+    #y <- image_trim(x) # width = 94.5cm, height = 88
+    #image_write(y, path = "Output/Fig_1C_width-85mm.png", format = "png", density = 300)
+
 #TODO:adjust position of the densityplot and try the fig without (b) tag lable to see whether it fits better on the page
 
 require("ggtext")
