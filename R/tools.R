@@ -35,7 +35,7 @@ getime = function (x) {ifelse(is.na(x), as.numeric(NA), as.numeric(difftime(x, t
 getDay = function (x) {as.Date(trunc(x, "day"))}
 
 # load/install packages
-  packages = c('ape','arm','RColorBrewer','data.table', 'effects', 'forcats', 'ggExtra', 'ggnewscale', 'ggplot2', 'ggthemes', 'glue',  'grid','gridExtra', 'here', 'htmlTable', 'lattice', 'lubridate', 'magrittr', 'maptools', 'multcomp', 'pals','patchwork', 'performance', 'phangorn','phytools','plyr','raster','reshape2', 'sandwich','scales','stringr','readxl','zoo', 'gt', 'tidyverse', 'ggpubr')
+  packages = c('ape','arm','RColorBrewer','data.table', 'effects', 'forcats', 'ggExtra', 'ggnewscale', 'ggplot2', 'ggthemes', 'glue',  'grid','gridExtra', 'here', 'Hmisc','htmlTable', 'lattice', 'lubridate', 'magrittr', 'maptools', 'multcomp', 'pals','patchwork', 'performance', 'phangorn','phytools','plyr','raster','reshape2', 'sandwich','scales','stringr','readxl','zoo', 'gt', 'tidyverse', 'ggpubr')
   sapply(packages, function(x) suppressPackageStartupMessages(using(x)) )
 
 # Customized ggplot themes
@@ -65,6 +65,8 @@ getDay = function (x) {as.Date(trunc(x, "day"))}
               text = element_text(family = fam),
               title = element_text(size=8, colour="grey30"),
               plot.subtitle = element_text(size=7.5),
+              plot.tag = element_text(size=7.5, hjust = 1),
+              plot.tag.location = "plot",
               axis.line = element_blank(),
               #axis.line = element_line(colour="grey70", linewidth=0.25),
               axis.title = element_text(size=7, colour="grey30"),

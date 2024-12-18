@@ -26,6 +26,7 @@ knitr::opts_chunk$set(message = FALSE, warning = FALSE, cache = TRUE)
     tx_legend_tit = 6
     inch = 0.393701 
     nsim = 5000
+    scale_size = 0.352778 # a scaling factor for the size outside ggplot theme (which is in mm) to match point size in the theme
    
 
   # packages and functions
@@ -154,7 +155,12 @@ knitr::opts_chunk$set(message = FALSE, warning = FALSE, cache = TRUE)
 
 #' ### Assortative mating for incubation bouts
 #' #### Across and within populations
+a = dd_n10[n_by_sp>10]
+quantile(a$r_sp, probs = c(0.025,0.5,0.975)); mean(a$r_sp) # weighing by number of m-f bouts is meaningless in the cross species context where species differ in bout lengths: 
+wtd.quantile(a$r_sp, a$n_by_sp, probs = c(0.025,0.5,0.975));wtd.mean(a$r_sp, a$n_by_sp) 
+
 #+ f1a fig.width=20*inch,fig.height=13*inch
+  #TODO: change scaling for size legend
   f1a = 
   ggplot(dd_n10[n_by_sp>10],aes(x = med_m, y = med_f, group = scinam, weight=n)) + 
       geom_point(aes(size = n, col = suborder), alpha = 0.5)+#geom_point(size = 0.5, alpha = 0.5) + 
@@ -172,10 +178,20 @@ knitr::opts_chunk$set(message = FALSE, warning = FALSE, cache = TRUE)
       #coord_cartesian(xlim = c(0, 16),ylim = c(0, 16)) +
       scale_x_continuous("♂ bout [hours]") +
       scale_y_continuous("♀ bout [hours]") +
-      labs(subtitle = "A")+
+      #labs(subtitle = "A")+
+      labs(tag = 'A')+
       facet_wrap(~scinam, ncol = 6, scales = "free") + 
       theme_MB + 
-      theme(strip.background = element_blank())
+      theme(strip.background = element_blank()
+           #panel.background = element_rect(fill = "transparent",
+            #                     colour = NA_character_), # necessary to avoid drawing panel outline
+    
+          #plot.background = element_rect(fill = "transparent",
+           #                         colour = NA_character_), # necessary to avoid drawing plot outline
+      #legend.background = element_rect(fill = "transparent"),
+      #legend.box.background = element_rect(fill = "transparent"),
+      #legend.key = element_rect(fill = "transparent")
+      )
 
   # add inset
     adding_inset <- function (grob, xmin = -Inf, xmax = Inf, ymin = -Inf, ymax = Inf, data){
@@ -261,10 +277,41 @@ knitr::opts_chunk$set(message = FALSE, warning = FALSE, cache = TRUE)
     f1a_
     
   if (save_plot == TRUE) {
-      ggsave(file = here::here("Output/Fig_1a_v2.png"), f1a_, width = 20, height = 10, units = "cm", bg = "white")
-      }  #dev.new(width = 20*inch, height = 10*inch)    
+      ggsave(file = here::here("Output/Fig_1A_width-180mm.png"), f1a_, width = 20, height = 10, units = "cm", bg = "white")
+      }  #dev.new(width = 20*inch, height = 10*inch)  
 
-#' #### Across evolutionary history 
+#+ f1b fig.width=10*inch,fig.height=10*inch
+f1b =
+    ggplot(dd_n10[n_by_sp>10],aes(x = med_m, y = med_f, group = sp, weight=n, color = suborder)) + 
+      #geom_point(aes(size = n), alpha = 0.5)+#geom_point(size = 0.5, alpha = 0.5) + 
+      geom_smooth(method = 'rlm', se = FALSE, alpha = 0.5, aes(lwd = slope_sp_certain))+ #col = 'grey40', 
+      geom_abline(intercept = 0, slope = 1, lty =3, col = 'red')+
+      coord_cartesian(xlim = c(0, 16),ylim = c(0, 16)) +
+      scale_x_continuous("♂ bout [hours]", expand = c(0, 0), breaks = c(0,4,8,12,16)) +
+      scale_y_continuous("♀ bout [hours]", expand = c(0, 0), breaks = c(0,4,8,12,16)) +
+      scale_color_manual(values=c(male, female), name = "Suborder")+ 
+      scale_linewidth_manual(values=c(.25, size_l), name = "Slope certain")+ 
+      #annotate("text", x=2.9, y=15.5, label= "Fits to nests' median bouts", col = "grey30", size = 2, hjust = 0) + 
+      #geom_segment(aes(x = 0.75, y = 15.5, xend = 2.5, yend = 15.5), color = "darkgrey", linewidth = .35) +
+
+      #annotate("text", x=3, y=14.5, label= "Slope", col = "grey30", size = 2, hjust = 0) + 
+      #annotate("text", x=1.1, y=14.5, label= "+", col = male, size = 2.75) + 
+      #annotate("text", x=2.2, y=14.5, label = "-", col = female, size = 2.75)+
+      labs(tag = 'B', subtitle = "")+
+      annotate("text", x = 0.25, y = 15.5,                # Set position manually
+        label = "Regression lines from A",
+        size = 7*scale_size, colour="grey30",
+        hjust = 0
+      )+
+      theme_MB+ #yheme_bw() +theme_MB2+
+      theme(legend.position="none"
+            #plot.background = element_rect(fill = "transparent",
+                            #  colour = NA_character_) # necessary to avoid drawing plot outline
+      )
+  if (save_plot == TRUE) {
+      ggsave(file = here::here("Output/Fig_1B_width-90mm.png"), f1b, width = 6.6, height = 6.7, units = "cm", bg = "white")
+      }  #dev.new(width = 20*inch, height = 10*inch)  
+#+ f1c fig.width=10*inch,fig.height=10*inch
 require("ggtext")
 require('ggtree')
 library('ggimage')
@@ -369,7 +416,6 @@ images[genus=='Arenaria', node := 7]
 #default_size <- ggplot2:::check_subclass("point", "Geom")$default_aes$size
 
 # plot tree
-#TODO:use scale_size_identity() and in geom_point multiply by 20-25 or multiply geom point by 10 only and use scale_size with range?
 p <- ggtree::ggtree(treei_c, ladderize = ladderize_, right = TRUE) + #layout = "circular", 
     geom_tree(aes(color = trait), continuous = "colour", size = 1) +
     geom_tiplab(offset = 0.5, fontface = "italic", colour = "grey30", size = 2.35)+
@@ -379,18 +425,21 @@ p <- ggtree::ggtree(treei_c, ladderize = ladderize_, right = TRUE) + #layout = "
                 x = genus_x, y = genus_y, image = image, size = I(width_tree/10)), by='width')+#, size = 0.1) +#inherit.aes = FALSE) +  # Adjust x and size as needed #, by = "width" 
     geom_point(data = data.frame(x = 97.5, y = c(5)), aes(x =x, y = y), color = "darkgrey", shape = 15, size = 1) +
     geom_point(data = data.frame(x = 97.5, y = c(11)), aes(x =x, y = y), color = "lightgrey", shape = 15, size = 1) +
-    geom_point(
-            aes(x = x, y = y, size = abs(pic)), #sqrt(abs(pic/pi))),
-            fill = "grey90", color = "grey50", pch = 21) +
+    #geom_point(
+    #        aes(x = x, y = y, size = abs(pic)), #sqrt(abs(pic/pi))),
+    #        fill = "grey90", color = "grey50", pch = 21) +
     #scale_size_identity()+
-    scale_size(range = c(0.1,2.5))+
+    #scale_size(range = c(0.1,2.5))+
     coord_cartesian(xlim = c(0,110))+
     guides(size = "none") + 
-    #labs(tag = '(b)') +
+    labs(tag = 'C') +
     #theme_tree2()+
     theme_MB + 
     theme(  legend.position="none",
+            plot.tag.position=c(0.06,.97),
             panel.border = element_blank()
+            #plot.background = element_rect(fill = "transparent",
+                                  #  colour = NA_character_)
         #legend.title = element_text(face = "bold", hjust = 0.5),
         #plot.margin = unit(c(0,0, 0, 0), "cm"),
         #plot.tag = element_text(size = 9)    
@@ -424,7 +473,7 @@ dens <- density(ds$r, n = 2^12)
 den <- data.table(x = dens$x, y = dens$y)
 #den <- den[x > log10(0.99) & x < log10(50.01)]
 
-f1b_l <-
+f1c_l <-
     ggplot() +
     geom_segment(data = den, aes(x, y, xend = x, yend = 0, colour = x)) +
     scale_color_gradientn(
@@ -468,21 +517,50 @@ f1b_l <-
     )
 
 # merge
-f2_tree = p_g + theme(legend.position = "none") + inset_element(f1b_l, 
+f1c = p_g + theme(legend.position = "none") + inset_element(f1c_l, 
 left = 0.10, right = 0.30,
 bottom = 0.03, top = 0.308, 
 on_top = TRUE, align_to = "full")
 
 # export
-ggsave(here::here("Output/Fig_tree_v7_ss.png"), f2_tree, width = 11, height = 10, units ='cm')
+ggsave(here::here("Output/Fig_tree_v7_ss.png"), f1c, width = 11, height = 10, units ='cm')
 
 # remove white space and reexport (the final exported size should be reduced by 10% to 85mm)
 x <- image_read(here::here("Output/Fig_tree_v7_ss.png"), density=300)
-y <- image_trim(x)
-image_write(y, path = "Output/Fig_tree_v7_ss_trim.png", format = "png", density = 300)
+y <- image_trim(x) # width = 94.5cm, height = 88
+image_write(y, path = "Output/Fig_1C_width-85mm.png", format = "png", density = 300)
 
-image_ggplot(y)
-
+# combine f1a, f1b, f1c with grid arrange
+# v1
+blank = ggplot() + theme_void() 
+f1b_b = ggarrange(
+    blank, f1b,blank,
+    nrow=3, heights=c(0.4,6.7,2.9), align = 'v'
+    )
+f1bc = ggarrange(
+    f1b_b,blank, f1c, 
+    ncol=3, widths=c(6.6,2.4,11), align = 'h'
+    )
+f1abc = ggarrange(
+    f1a,f1bc,
+    nrow=2, heights=c(9.5,10), align = 'v'
+    )
+ggsave(here::here("Output/Fig_1_width-180mm.png"), f1abc, width = 20, height = 19.7, units ='cm', bg='white')
+# v2
+blank = ggplot() + theme_void() 
+f1b_b = ggarrange(
+    blank, f1b,blank,
+    nrow=3, heights=c(0.4,6.7,2.9), align = 'v'
+    )
+f1bc = ggarrange(
+    f1b_b,blank, f1c, blank,
+    ncol=4, widths=c(6.6,1.4,11, 1), align = 'h'
+    )
+f1abc = ggarrange(
+    f1a,f1bc,
+    nrow=2, heights=c(9.5,10), align = 'v'
+    )
+ggsave(here::here("Output/Fig_1_width-180mm_v2.png"), f1abc, width = 20, height = 19.7, units ='cm', bg='white')
 
 # OLD   
 #+ f1 fig.width=9*inch,fig.height=5*1.95*inch
