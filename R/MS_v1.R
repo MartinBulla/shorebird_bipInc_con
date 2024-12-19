@@ -46,8 +46,19 @@ knitr::opts_chunk$set(message = FALSE, warning = FALSE, cache = TRUE)
     load(here::here("Data/Bulla_et_al_2016-comparative_all.RData"))  
     d$lat_a=abs(d$lat)
     d=d[d$sex%in%c('f','m'),]
+   
+    # add inc_start
+    n=fread(here::here('Data/Bulla_et_al_2016-Supplementary Data 4 - Nests metadata.csv'), stringsAsFactors=FALSE)
+    
+    d$inc_start=as.POSIXct(n$incubation_start_datetime[match(tolower(paste(d$breeding_site,d$year,d$nest,d$nn)),tolower(paste(n$breeding_site,n$year,n$nest, n$nn)))]) 
+
+    d$bout_start_j = as.numeric(format(d$datetime_on ,"%j")) - as.numeric(format(d$inc_start,"%j"))+1
+    d$end_state=n$end_state[match(tolower(paste(d$breeding_site,d$year,d$nest,d$nn)),tolower(paste(n$breeding_site,n$year,n$nest, n$nn)))]
+    d$lat_a=abs(d$lat)
+
     d = data.table(d)
-     d[, length(unique(nest)), by = list(scinam, breeding_site)] 
+    #d[, length(unique(nest)), by = list(scinam, breeding_site)] 
+
 
     # adjust variables
       d[, lat_pop := factor(paste(round(mean(lat),2),sp)), pop]
@@ -536,195 +547,16 @@ f1abc = ggarrange(
 if (save_plot == TRUE) {
 ggsave(here::here("Output/Fig_1_width-180mm.png"), f1abc, width = 20, height = 19.7, units ='cm', bg='white')
 x <- image_read(here::here("Output/Fig_1_width-180mm.png"), density=300)
-y <- image_trim(x) # width = 94.5cm, height = 88
+y <- image_trim(x) # width = 94.5cm, height = 88 (conversion factor 1181/100 )
 image_write(y, path = "Output/Fig_1_width-178mm_trimmed.png", format = "png", density = 300)
 
-1181/100 
-
-} #TODO:use magigc to reduce white space
+} 
 
 f1abc
-
-#TODO:START HERE
-# OLD   
-#+ f1 fig.width=9*inch,fig.height=5*1.95*inch
-  # f1
-  f1a =
-    ggplot(dd_n10[n_by_pop>10],aes(x = med_m, y = med_f, group = pop, weight=n, col = slope_pop_certain)) + 
-      #geom_point(aes(size = n), alpha = 0.5)+#geom_point(size = 0.5, alpha = 0.5) + 
-      geom_smooth(method = 'rlm', se = FALSE, alpha = 0.2, linewidth = size_l)+
-      geom_abline(intercept = 0, slope = 1, lty =3)+
-      #stat_cor(aes(label = ..r.label..),  label.x = 3, size = 2) + 
-      #facet_wrap(~pop) +
-      coord_cartesian(xlim = c(0, 16),ylim = c(0, 16)) +
-      scale_x_continuous("♂ bout [hours]", expand = c(0, 0), breaks = c(0,4,8,12,16)) +
-      scale_y_continuous("♀ bout [hours]", expand = c(0, 0), breaks = c(0,4,8,12,16)) +
-      scale_color_manual(values=c(male, female))+ 
-      #scale_size(breaks = c(1,15,30), name = 'n days') +
-      annotate("text", x=2.9, y=15.5, label= "Fits to nests' median bouts", col = "grey30", size = 2, hjust = 0) + 
-      geom_segment(aes(x = 0.75, y = 15.5, xend = 2.5, yend = 15.5), color = "darkgrey", linewidth = .35) +
-
-      annotate("text", x=3, y=14.5, label= "Slope", col = "grey30", size = 2, hjust = 0) + 
-      annotate("text", x=1.1, y=14.5, label= "+", col = male, size = 2.75) + 
-      annotate("text", x=2.2, y=14.5, label = "-", col = female, size = 2.75)+
-      labs(subtitle = "Populations")+
-      theme_MB+ #yheme_bw() +theme_MB2+
-      theme(legend.position="none"
-            )
-
-  # f1b
-  f1b =
-  ggplot(dd_n10[n_by_sp>10],aes(x = med_m, y = med_f, group = sp, weight=n, col = slope_sp_neg)) + 
-      #geom_point(aes(size = n), alpha = 0.5)+#geom_point(size = 0.5, alpha = 0.5) + 
-      geom_smooth(method = 'rlm', se = FALSE, alpha = 0.2, linewidth = size_l)+
-      geom_abline(intercept = 0, slope = 1, lty =3)+
-      #stat_cor(aes(label = ..r.label..),  label.x = 3, size = 2) + 
-      #facet_wrap(~pop) +
-      coord_cartesian(xlim = c(0, 16),ylim = c(0, 16)) +
-      scale_x_continuous("♂ bout [hours]", expand = c(0, 0), breaks = c(0,4,8,12,16)) +
-      scale_y_continuous("♀ bout [hours]", expand = c(0, 0), breaks = c(0,4,8,12,16)) +
-      scale_color_manual(values=c(male, female))+ 
-      labs(subtitle = "Species")+
-      theme_MB + #theme_bw() + theme_MB2+
-      theme(legend.position="none"
-            #axis.title.y=element_blank()
-            )    
-
-  # f1c
-    n10_fmr = dd_n10[n_by_pop>10 & !(is.na(r) | duplicated(pop))] # summary(n10_fmr[n_by_sp>10, r]); n10_fmr[n_by_pop>10 & 0>r, r]
-     
-    f1c =
-    ggplot(n10_fmr, aes(x=r, fill = r_neg)) + 
-      geom_histogram() + geom_vline(xintercept = 0, lty =3, col = 'red')+
-      #facet_wrap(~genus, nrow = 5) + 
-      coord_cartesian(xlim = c(-0.1, 1)) + 
-      scale_x_continuous("Pearson's correlation coefficient\n[for median ♂ & ♀ incubation bout length]", expand = c(0, 0), breaks = c(0,0.25,0.5,0.75,1)) + #, 
-      scale_y_continuous("Count", expand = c(0, 0)) +
-      scale_fill_manual(values = c(male, female), name = 'Negative correltation')+
-      #labs(subtitle = "")  +
-      theme_MB + #theme_bw() + theme_MB2+
-      theme(legend.position="none"
-            )
-  # f1d
-    n10_fmr_sp = dd_n10[n_by_sp>10 & !(is.na(r_sp) | duplicated(sp))] # summary(dd_n10[n_by_sp>10, r_sp]); dd_n10[n_by_pop>10 & 0>r_sp, r_sp]; nrow(n10_fmr_sp)
-     
-    f1d =
-    ggplot(n10_fmr_sp, aes(x=r_sp, fill = r_sp_neg)) + 
-      geom_histogram() + geom_vline(xintercept = 0, lty =3, col = 'red')+
-      #facet_wrap(~genus, nrow = 5) + 
-      coord_cartesian(xlim = c(0, 1)) + 
-      scale_x_continuous("Pearson's correlation coefficient\n[for median ♂ & ♀ incubation bout length]", expand = c(0, 0), breaks = c(0,0.25,0.5,0.75,1)) + #, 
-      scale_y_continuous("Count", expand = c(0, 0)) +
-      scale_fill_manual(values = c(male, female), name = 'Negative correltation')+
-      #labs(subtitle = "")  +
-      theme_MB + #theme_bw() + theme_MB2+
-      theme(legend.position="none"
-            )
-
-  # combine and export
-  f1ab =  f1a + f1b +
-    plot_layout(
-      axis_titles = "collect"
-    )
-
-  f1cd =  f1c + f1d +
-    plot_layout(
-      axis_titles = "collect"
-    )  
-
-  
-  if (save_plot == TRUE) {
-  ggsave(file = here::here("Output/Fig_1_width-90mm_v2.png"), f1ab/f1cd, width = 9, height = 5*1.95, units = "cm", bg = "white")
-  }
-
-  f1ab/f1cd   
-#'
-#' <br> 
-#' 
-#+ fs1a fig.width=20*inch,fig.height=13*inch
-  fs1a = 
-  ggplot(dd_n10[n_by_pop>10],aes(x = med_m, y = med_f, group = pop, weight=n, col = suborder)) + 
-      geom_point(aes(size = n), alpha = 0.5)+#geom_point(size = 0.5, alpha = 0.5) + 
-      facet_wrap(~pop_lat, nrow = 4, scales = "free") + 
-      geom_smooth(method = 'rlm', se = FALSE, alpha = 0.2, linewidth = size_l)+
-      geom_smooth(method = 'lm', se = FALSE, alpha = 0.2, linewidth = size_l, col = 'red')+
-      geom_abline(intercept = 0, slope = 1, lty =3)+
-      #stat_cor(aes(label = ..r.label..),  label.x = 3, size = 2) + 
-      #facet_wrap(~pop) +
-      #coord_cartesian(xlim = c(0, 16),ylim = c(0, 16)) +
-      scale_x_continuous("♂ bout [hours]") +
-      scale_y_continuous("♀ bout [hours]") +
-      scale_color_manual(values=c(male, female), name = "Suborder")+ 
-      scale_size(name = "Number of bouts") + 
-      #scale_size(breaks = c(1,15,30), name = 'n days') +
-      labs(subtitle = "Populations (species name & ° latitude")+
-      theme_MB + 
-      theme(strip.background = element_blank())
-  if (save_plot == TRUE) {
-      ggsave(file = here::here("Output/Fig_S1a.png"), fs1a, width = 20, height = 13, units = "cm", bg = "white")
-      }      
-  #' 
-  #' <br> 
-  #' 
-  
-  #' 
-  #' <br> 
-  #'     
-
-#' #### Across evolutionary history 
-  # prepere data for plotting
-    ds = dd_n10[n_by_sp>10]
-    ds = ds[, cor(med_f, med_m), by = list(scinam, animal)]  %>% setnames(old = 'V1', new = 'r')
-    ds = merge(ds, dd_n10[!duplicated(scinam), .(scinam,n_by_sp)])
-    #summary(ds); summary(ds[!scinam%in%'Limosa lapponica'])
-
-    sp_r=data.frame(ds[,c("r","scinam")])
-    tree_r = drop.tip(tree, tree$tip.label[!tree$tip.label%in%sp_r$scinam])
-    
-    row.names(sp_r)=sp_r$scinam
-    sp_r$scinam=NULL
-    sp_r$r=as.numeric(sp_r$r)
-      
-    svlr<-as.matrix(sp_r)[,1]
-    svlr<-svlr[tree_r$tip.label]
-      
-    objr<-contMap(ladderize(tree_r, right=T),svlr,plot=FALSE)
-    objr<-setMap(objr,colors=c(brewer.pal(11,"Spectral")[1],brewer.pal(11,"Spectral")[4],brewer.pal(11,"Spectral")[7:11])) 
-
-  # prepare phylogenetic contrasts
-    r_pear=ds$r
-    names(r_pear)=ds$scinam
-    tree_r_l=ladderize(tree_r, right=T)
-    
-    yourPics <- pic(x=r_pear, phy=tree_r_l)
-
-  # plot
-    if(save_plot==TRUE){png(here::here("Output/Fig_2_width-64mm_v2_Liam.png"), width=2.5,height=3.5,units="in",res=600)} else {
-    dev.new(width=2.3,height=3.5)}
-
-    #save(file='freeze/Data/for_Liam.Rdata', objr)
-    #load('for_Liam.Rdata')
-    par(mar=c(1.6,1.6,1.7,0.7), ps=12, mgp=c(1.35,0.35,0), las=2, cex.lab=0.7, cex.axis=0.6, tcl=-0.15,bty="n") # 0.6 makes font 7pt, 0.7 8pt
-
-    plot(objr,lwd=2, sig=1,outline=FALSE,fsize=0.5,legend=FALSE)# legend=30)#mar=c(5.1,0.2,0.2,0.2),
-
-    add.color.bar(30, objr$cols, title="", digits=0, prompt=FALSE,
-      x=0, y=1.1, subtitle="", outline=FALSE, lwd=3, lims=NULL)
-    text(x=3, y=1.1, "0", pos=2, cex = 0.4) ## to the left
-    text(x=27, y=1.1, "1", pos=4, cex = 0.4) ## to the right
-    text(x=14, y=1, "Pearson's r for\n ♀ & ♂ median nest bout",
-      pos=3, cex = 0.4)
-
-    #add.color.bar(30,objr$cols,title=list("Pearson's r for ♀ & ♂\nmedian nest bout"),fsize=0.4,lims=objr$lims,digits=0,prompt=FALSE,x=0,y=1.1,subtitle="",outline=FALSE,lwd=3)#, mgp = c(0, 0,0))
-    
-    nodelabels(pch=21, cex=abs(yourPics)*10, bg="grey90", col = "grey50") # add phylogenetic contrast contrasts
-    
-    if(save_plot==TRUE){dev.off()}  
 
 #' <br> 
 #' 
 #' ***
-#' 
 #' ### Within nest bout pair similarity
 # prepare data
   # fix issue with non-alternating sex
@@ -754,7 +586,7 @@ f1abc
         #fm[!is.na(sex_next) & sex == sex_next, .(pk_nest, bout_length, sex, sex_next,  datetime_on, datetime_off, pk)]
         #print(fm[!is.na(sex_next) & pk_nest == 'BLGO frie 2013 NA-B319 2', .(pk, pk_nest, bout_length, sex, sex_prev, sex_next, off_prev, datetime_on, datetime_off, on_next)], nrow=1000)
         # some bouts for these nests were removed #fm[!is.na(sex_next) & sex == sex_next & pk_nest %in% c('BLGO frie 2013 NA-B319 2','BLOY hafj 2005 101-05A 1','BLOY hafj 2005 114-05A 1','BLOY hafj 2006 114-06B 2','BLOY hafj 2006 115-06B 2','BLOY hafj 2006 118-06A 1','KEPL tuzl 1997 1997-D-37 1','LRPL czrp 2014 LR504_CZ2014 0','SAND zack 2007 S30 1','GRPL kois 2011 KR24 1','KEPL ddll 2006 A16 1','KEPL ddll 2006 A20 1','KEPL ddll 2006 CA3 1','KEPL ddll 2007 AL07 1','KEPL ddll 2007 MA07 1','KEPL ddll 2008 AB08 1','KEPL ddll 2008 CAA08 1')]
-                                                                                                                                                                
+                                                                  
   # create dataset
     fm[ , bout_m := data.table::shift(bout_length, type = 'lead'), by = pk_nest]
     fm = fm[sex=='f' & !is.na(bout_m)]
@@ -764,22 +596,20 @@ f1abc
   # estimate within pair bout correlations
     fm[, n_by_nest := .N, pk_nest] #summary(fm$n_by_nest); fm[n_by_nest>6, length(unique(pk_nest))]
     # pearson
-      fm[n_by_nest>5,  r := cor(bout_f, bout_m), by = pk_nest]
-      fm[n_by_nest>5 & r<0, r_neg := 'yes']
-      fm[n_by_nest>5 & !r_neg%in%'yes', r_neg := 'no']
-      fmr = fm[!is.na(r), list(
-        r = unique(r)
-        ),
-        by = list(suborder,genus,animal,sp,scinam,species,year, breeding_site,pop,lat_pop, pop_lat, nest, nn, app, tidal, tidal_pop,pop_wing_f, pop_wing_m, pk_nest, lat, n_by_nest, r_neg)  
-      ] # same as fmr = fm[!(is.na(r) | duplicated(paste(r, pk_nest))) ]
+      fm[n_by_nest>=5,  r := cor(bout_f, bout_m), by = pk_nest]
+      fm[n_by_nest>=5 & r<0, r_neg := 'yes']
+      fm[n_by_nest>=5 & !r_neg%in%'yes', r_neg := 'no']
 
     # rlm
-      fm[n_by_nest>5,  slope_nest := rlm(bout_f ~ bout_m, maxit = 100)  %>% coef  %>% magrittr::extract(2), by = pk_nest] 
-      fm[n_by_nest>5 & slope_nest<0, slope_nest_neg := 'yes']
-      fm[n_by_nest>5 & !slope_nest_neg%in%'yes', slope_nest_neg := 'no']
-    
-    # find a group that causes the warning
-      fm5 = fm[n_by_nest>5]
+      fm[n_by_nest>=5,  slope_nest := rlm(bout_f ~ bout_m, maxit = 100)  %>% coef  %>% magrittr::extract(2), by = pk_nest] 
+      fm[n_by_nest>=5 & slope_nest<0, slope_nest_neg := 'yes']
+      fm[n_by_nest>=5 & !slope_nest_neg%in%'yes', slope_nest_neg := 'no']
+      fm[n_by_nest>=5, slope_nest_certain := simulate_rlm_no_weights(.SD), by = pk_nest]
+
+    # DONE find a group that causes the warning
+      done = TRUE
+      if(done!=TRUE){
+      fm5 = fm[n_by_nest>=5]
       problematic_groups <- lapply(unique(fm5$pk_nest), function(g) {
         tryCatch({
           fm5[pk_nest == g, slope_nest := rlm(bout_f ~ bout_m, maxit = 100)  %>% coef  %>% magrittr::extract(2)]
@@ -797,11 +627,143 @@ f1abc
       } else {
         print("No warnings found.")
       }
+      }
+    
+    fm = fm[!pk_nest =="AMGP chur 2013 13AMGP03W 1"] # remove the group where rlm failed to converge #ggplot(x, aes(x = bout_m, y = bout_f)) + geom_point()
 
-    fm_rlm = fm[!pk_nest =="AMGP chur 2013 13AMGP03W 1"] # remove the group where rlm failed to converge #ggplot(x, aes(x = bout_m, y = bout_f)) + geom_point()
+    # aggregate
+      fmr = fm[!is.na(r), list(
+        r = unique(r),
+        bout_m_min = min(bout_m),
+        bout_m_max = max(bout_m),
+        bout_f_min = min(bout_f),
+        bout_f_max = max(bout_f),
+        bout_start_j=median(bout_start_j, na.rm= TRUE)
+        ),
+        by = list(suborder,genus,animal,sp,scinam,species,year, breeding_site,pop,lat_pop, pop_lat, nest, nn, app, tidal, tidal_pop,pop_wing_f, pop_wing_m, pk_nest, lat, n_by_nest, r_neg,slope_nest_certain)  
+      ] # same as fmr = fm[!(is.na(r) | duplicated(paste(r, pk_nest))) ]
 
-#' #### Distribution of within nest correlations
-#+ fig.width = 6, fig.height = 5
+      # median r based on certain rs only, except for Pluvialis sqatarola having only uncertain ones, while making placement for the free axis (both below opitons work, but not 100% because they forget that chat gpt sets the pedding to the axis - TODO:check and adjust - see the threat there)
+      # first option
+      fmrm = fmr[slope_nest_certain%in%'yes', list(
+        r = median(r, na.rm = TRUE),
+        bout_m_pos =  min(bout_m_min) + 0.05 * (max(bout_m_max) - min(bout_m_min)),
+        bout_f_pos =  max(bout_f_max) + 0.05 * (max(bout_f_max) - min(bout_f_min))),
+        by = list(suborder,genus,animal,sp,scinam,species)  
+      ] 
+      fmrm_add = fmr[scinam%in%'Pluvialis squatarola', list(
+        r = median(r, na.rm = TRUE),
+        bout_m_pos =  min(bout_m_min)+ 0.05 * (max(bout_m_max) - min(bout_m_min)),
+        bout_f_pos =  max(bout_f_max) + 0.05 * (max(bout_f_max) - min(bout_f_min))),
+        by = list(suborder,genus,animal,sp,scinam,species)  
+      ] 
+      fmrm = rbind(fmrm,fmrm_add)
+    
+    # second option
+      fmrm = fmr[slope_nest_certain%in%'yes', list(
+        r = median(r, na.rm = TRUE),
+        bout_m_pos =  min(bout_m_min),
+        bout_f_pos =  max(bout_f_max)),
+        by = list(suborder,genus,animal,sp,scinam,species)  
+      ] 
+      fmrm_add = fmr[scinam%in%'Pluvialis squatarola', list(
+        r = median(r, na.rm = TRUE),
+        bout_m_pos =  min(bout_m_min),
+        bout_f_pos =  max(bout_f_max)),
+        by = list(suborder,genus,animal,sp,scinam,species)  
+      ] 
+      fmrm = rbind(fmrm,fmrm_add)
+
+      # Offset the text slightly to avoid overlaps
+        x_offset <- 0.025  # Adjust as needed
+        y_offset <- 0.05 # Adjust as needed
+
+    # align the two datasets to be plotted
+      fm10=fm[n_by_nest>10]
+      fmrm <- fmrm %>%
+          mutate(scinam = factor(scinam, levels = unique(fm10$scinam)))
+
+
+#' 
+#+ f2 fig.width=20*inch,fig.height=20*inch
+  f2a = 
+  ggplot() + 
+      geom_smooth(data = fm10, aes(x = bout_m, y = bout_f, group = pk_nest, lwd = slope_nest_certain), method = 'rlm', se = FALSE,  col = 'grey40', alpha = 0.8, method.args = list(maxit = 100))+ #linewidth = size_l,alpha = 0.2, col = slope_nest_neg
+      geom_abline(intercept = 0, slope = 1, lty =3, col = 'red')+
+      geom_text(data = fmrm, aes(x = 0, y =50, 
+      label = paste('r =', round(r,2))), #paste(expression(paste(italic("r"), "="), round(r,2)))), # 
+      hjust = 0, vjust =1, size = 2) +
+      #      ggpubr::stat_cor(method="pearson",size = 2, cor.coef.name = 'r',aes(x = bout_m, y = bout_f, label = ..r.label..), inherit.aes = FALSE) +
+      #scale_color_manual(values=c(male, female), name = "Slope negative")+ 
+      scale_linewidth_manual(values=c(.25, size_l), name = "Slope certain")+ 
+    
+      #scale_size(breaks = c(1,15,30), name = 'n days') +
+
+      #stat_cor(aes(label = ..r.label..),  label.x = 3, size = 2) + 
+      #facet_wrap(~pop) +
+      #coord_cartesian(xlim = c(0, 16),ylim = c(0, 16)) +
+      scale_x_continuous("♂ bout [hours]") +
+      scale_y_continuous("♀ bout [hours]") +
+      #labs(subtitle = "A")+
+      labs(tag = 'A')+
+      facet_wrap(~scinam, ncol = 8)+#, scales = "free") + 
+      theme_MB + 
+      theme(strip.background = element_blank()
+           #panel.background = element_rect(fill = "transparent",
+            #                     colour = NA_character_), # necessary to avoid drawing panel outline
+    
+          #plot.background = element_rect(fill = "transparent",
+           #                         colour = NA_character_), # necessary to avoid drawing plot outline
+      #legend.background = element_rect(fill = "transparent"),
+      #legend.box.background = element_rect(fill = "transparent"),
+      #legend.key = element_rect(fill = "transparent")
+      )
+ggsave(file = here::here("Output/Fig_2a_width-180mm_fixed-axis.png"), f2a, width = 20, height = 11, units = "cm")
+
+
+f2a_free = 
+  ggplot() + 
+      geom_smooth(data = fm[n_by_nest>10], aes(x = bout_m, y = bout_f, group = pk_nest, lwd = slope_nest_certain), method = 'rlm', se = FALSE,  col = 'grey40', alpha = 0.8, method.args = list(maxit = 100))+ #linewidth = size_l,alpha = 0.2, col = slope_nest_neg
+      geom_abline(intercept = 0, slope = 1, lty =3, col = 'red')+
+      facet_wrap(~scinam, ncol = 6, scales = "free") + 
+      #v1: geom_text(data = fmrm, aes(x = bout_m_pos, y =bout_f_pos, 
+      #label = paste('r =', round(r,2))),
+      #hjust = 0, vjust =1, size = 2) +
+      geom_text(data = fmrm, aes(x = bout_m_pos-x_offset*abs(bout_m_pos), y =bout_f_pos+y_offset*abs(bout_f_pos), 
+      label = paste('r =', round(r,2))),
+      hjust = 0, vjust =1, size = 2) + #v2
+      #ggpubr::stat_cor(method="pearson",size = 2, cor.coef.name = 'r',aes(x = bout_m, y = bout_f, label = ..r.label..), inherit.aes = FALSE) +
+      #scale_color_manual(values=c(male, female), name = "Slope negative")+ 
+      scale_linewidth_manual(values=c(.25, size_l), name = "Slope certain")+ 
+    
+      #scale_size(breaks = c(1,15,30), name = 'n days') +
+
+      #stat_cor(aes(label = ..r.label..),  label.x = 3, size = 2) + 
+      #facet_wrap(~pop) +
+      #coord_cartesian(xlim = c(0, 16),ylim = c(0, 16)) +
+      scale_x_continuous("♂ bout [hours]") +
+      scale_y_continuous("♀ bout [hours]") +
+      #labs(subtitle = "A")+
+      labs(tag = 'A')+
+      theme_MB + 
+      theme(strip.background = element_blank()
+           #panel.background = element_rect(fill = "transparent",
+            #                     colour = NA_character_), # necessary to avoid drawing panel outline
+    
+          #plot.background = element_rect(fill = "transparent",
+           #                         colour = NA_character_), # necessary to avoid drawing plot outline
+      #legend.background = element_rect(fill = "transparent"),
+      #legend.box.background = element_rect(fill = "transparent"),
+      #legend.key = element_rect(fill = "transparent")
+      )
+ggsave(file = here::here("Output/Fig_2a_width-180mm_free-axis_v2.png"), f2a_free, width = 20, height = 16, units = "cm")
+
+#' <br> 
+#' 
+#' ***
+#' 
+
+#+ f2c, fig.width = 6, fig.height = 5
   # within and across species  
        # in r and suborder specific
         give.n <- function(x){
@@ -831,7 +793,7 @@ f1abc
                 )
       #ggsave(here::here('Output/Boxplot_fm-r.png'), height = 4, width = 3.5)
     # within and across genera
-    ggplot(fmr[n_by_nest>5], aes(x=r, fill = r_neg)) + 
+    ggplot(fm[n_by_nest>10], aes(x=r, fill = r_neg)) + 
       geom_histogram() + geom_vline(xintercept = 0, lty =3, col = 'red')+
       facet_wrap(~genus, nrow = 5) + 
       scale_x_continuous("Pearson's correlation coefficient for ♂ & ♀", expand = c(0, 0)) +
@@ -843,12 +805,12 @@ f1abc
     ggsave('Output/cor_fm_r-bout_hist_genus.png', height = 4, width = 2.5)
 #' #### Betweena & within nest variation in rlm 
 #+ fig.width=6,fig.height=6
-  ggplot(fm_rlm[n_by_nest>10],aes(x = bout_m, y = bout_f, group = pk_nest, col = slope_nest_neg)) + 
-    geom_smooth(method = 'rlm', se = FALSE, alpha = 0.2, size = size_l, method.args = list(maxit = 100))+
+  ggplot(fm[n_by_nest>10],aes(x = bout_m, y = bout_f, group = pk_nest, col = slope_nest_neg)) + 
+    geom_smooth(method = 'rlm', se = FALSE, alpha = 0.2, linewidth = size_l, method.args = list(maxit = 100))+
     scale_color_manual(values=c(male, female))+ 
     geom_abline(intercept = 0, slope = 1, lty =3)+
     #stat_cor(aes(label = ..r.label..),  label.x = 3, size = 2) + 
-    facet_wrap(~lat_pop) +
+    facet_wrap(~scinam) +
     coord_cartesian(xlim = c(0, 30),ylim = c(0, 30)) +
     scale_x_continuous("♂ bout [hours]", expand = c(0, 0), breaks = c(0,10,20)) +
     scale_y_continuous("♀ bout [hours]", expand = c(0, 0), breaks = c(0,10,20)) +

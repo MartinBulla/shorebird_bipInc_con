@@ -96,7 +96,7 @@ getDay = function (x) {as.Date(trunc(x, "day"))}
               legend.box.margin = margin(l = -6), #legend.justification = c(-1,0),
               legend.background = element_blank()
               )  
-# Function for group-wise robust regression credible intervals
+# Function for credible intervals from group-wise robust regression with weights 
     simulate_rlm <- function(dt) {
       n_sim = 5000
       # Extract coefficients
@@ -122,6 +122,33 @@ getDay = function (x) {as.Date(trunc(x, "day"))}
       
       if((ci[1, 2] <= 0 && ci[2, 2] >= 0)==TRUE){'no'}else{'yes'}
     }
+# Function for credible intervals from group-wise robust regression without weights
+    simulate_rlm_no_weights <- function(dt) {
+      n_sim = 5000
+      #dt=fm[pk_nest=='AMGP barr 2010 AMGP230 1']  
+      # Extract coefficients
+      rlm_model <- tryCatch(
+        rlm(bout_f ~ bout_m, data = dt, maxit = 100),
+        error = function(e) return(NULL)
+      )
+      coef_estimates <- coef(rlm_model)
+      
+      # Compute covariance matrix
+      residuals <- resid(rlm_model)
+      design_matrix <- model.matrix(rlm_model)
+      sigma_squared <- sum(residuals^2) / nrow(design_matrix)
+      cov_matrix <- sigma_squared * solve(t(design_matrix) %*% design_matrix)
+  
+      # Simulate from multivariate normal
+      set.seed(25)
+      sim_coefficients <- MASS::mvrnorm(n_sim, mu = coef_estimates, Sigma = cov_matrix)
+      
+      # Compute quantiles
+      ci <- apply(sim_coefficients, 2, quantile, probs = c(0.025, 0.975))
+        # Check if credible interval for slope crosses zero
+      
+      if((ci[1, 2] <= 0 && ci[2, 2] >= 0)==TRUE){'no'}else{'yes'}
+    }    
       
 # model assumption functions
   # mixed models
