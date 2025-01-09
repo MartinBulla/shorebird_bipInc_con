@@ -15,6 +15,8 @@
 #+ r setup, include=FALSE 
 knitr::opts_chunk$set(message = FALSE, warning = FALSE, cache = TRUE)
 
+# TODO:check whether densityscale in trees are correct in fs2 surely not
+
 #' ##### Code to load tools & data
   # constants
     save_plot = TRUE # save_plot as PNG TRUE/FALSE
@@ -664,45 +666,10 @@ f1abc
       fm10=fm[n_by_nest>10]
       fmrm <- fmrm %>%
           mutate(scinam = factor(scinam, levels = unique(fm10$scinam)))
-
-
 #' 
 #+ f2 fig.width=20*inch,fig.height=20*inch
-  f2a = 
-  ggplot() + 
-      geom_smooth(data = fm10, aes(x = bout_m, y = bout_f, group = pk_nest, lwd = slope_nest_certain), method = 'rlm', se = FALSE,  col = 'grey40', alpha = 0.8, method.args = list(maxit = 200))+ #linewidth = size_l,alpha = 0.2, col = slope_nest_neg
-      geom_abline(intercept = 0, slope = 1, lty =3, col = 'red')+
-      geom_text(data = fmrm, aes(x = 0, y =50, 
-      label = paste('r =', round(r,2))), #paste(expression(paste(italic("r"), "="), round(r,2)))), # 
-      hjust = 0, vjust =1, size = 2) +
-      #      ggpubr::stat_cor(method="pearson",size = 2, cor.coef.name = 'r',aes(x = bout_m, y = bout_f, label = ..r.label..), inherit.aes = FALSE) +
-      #scale_color_manual(values=c(male, female), name = "Slope negative")+ 
-      scale_linewidth_manual(values=c(.25, size_l), name = "Slope certain")+ 
-    
-      #scale_size(breaks = c(1,15,30), name = 'n days') +
-
-      #stat_cor(aes(label = ..r.label..),  label.x = 3, size = 2) + 
-      #facet_wrap(~pop) +
-      #coord_cartesian(xlim = c(0, 30),ylim = c(0, 30)) +
-      scale_x_continuous("♂ bout [hours]") +
-      scale_y_continuous("♀ bout [hours]") +
-      #labs(subtitle = "A")+
-      labs(tag = 'A')+
-      facet_wrap(~scinam, ncol = 8)+#, scales = "free") + 
-      theme_MB + 
-      theme(strip.background = element_blank()
-           #panel.background = element_rect(fill = "transparent",
-            #                     colour = NA_character_), # necessary to avoid drawing panel outline
-    
-          #plot.background = element_rect(fill = "transparent",
-           #                         colour = NA_character_), # necessary to avoid drawing plot outline
-      #legend.background = element_rect(fill = "transparent"),
-      #legend.box.background = element_rect(fill = "transparent"),
-      #legend.key = element_rect(fill = "transparent")
-      )
-ggsave(file = here::here("Output/Fig_2a_width-180mm_fixed-axis-shortNames.png"), f2a, width = 20, height = 11, units = "cm")
-
-f2a_lim = 
+# f2a  
+  f2a_lim = 
   ggplot() + 
       geom_smooth(data = fm10, aes(x = bout_m, y = bout_f, group = pk_nest, lwd = slope_nest_certain), method = 'rlm', se = FALSE,  col = 'grey40', alpha = 0.8, method.args = list(maxit = 200))+ #linewidth = size_l,alpha = 0.2, col = slope_nest_neg
       geom_abline(intercept = 0, slope = 1, lty =3, col = 'red')+
@@ -734,12 +701,74 @@ f2a_lim =
       #legend.box.background = element_rect(fill = "transparent"),
       #legend.key = element_rect(fill = "transparent")
       )
-ggsave(file = here::here("Output/Fig_2a_width-180mm_fixed-axis-limits30.png"), f2a_lim, width = 20, height = 11, units = "cm")
+  ggsave(file = here::here("Output/Fig_2a_width-180mm_fixed-axis-limits30.png"), f2a_lim, width = 20, height = 11, units = "cm")
 
 
-f2a_free = 
+
+# f2b
+  # within and across species  
+     fmr1 = fmr[n_by_nest>10 & slope_nest_certain%in%'yes']
+     fmr2 = fmr[n_by_nest>10 & scinam =='Pluvialis squatarola']
+     fmr12 = rbind (fmr1,fmr2)
+       # in r and suborder specific
+        give.n <- function(x){
+          return(c(y = 1.1, label = length(x))) 
+          # experiment with the multiplier to find the perfect position
+        }
+      # define color for genus
+        go=data.frame(genus=c("Arenaria","Calidris","Tringa","Limnodromus", "Limosa","Numenius", "Charadrius", "Vanellus", "Pluvialis","Haematopus"),
+        cols=c(brewer.pal(11,"Spectral")[1:6],brewer.pal(11,"Spectral")[7:8],brewer.pal(11,"Spectral")[10:11]), stringsAsFactors=FALSE)
+           
+  f2b =   
+  ggplot(fmr12, aes(y = fct_reorder(scinam, r, .fun = median, .desc =TRUE), x = r, fill = genus)) + 
+    geom_boxplot(
+      lwd = 0.25,
+      outlier.size = 0.25,
+      outlier.color = "grey40")+
+    stat_summary(fun.data = give.n, geom = "text", size = 1.5, col = "grey30") +
+    #scale_x_continuous(lim = c(-1,1))+
+    scale_fill_manual(values = go$cols, name = 'Genus')+
+    facet_grid(rows = vars(forcats::fct_relevel(suborder, "Scolopaci", "Charadrii")), scales = "free_y",space = "free_y") +
+    geom_vline(xintercept = 0, lty = 3)+
+    xlab("Pearson's r for ♀ & ♂ bout length\n[for each nest]") +
+    labs(tag = 'B')+
+    theme_MB +
+    theme(
+      panel.grid.major.y = element_line(color = "grey90", size = 0.2),
+      text = element_text(family = "Arial Unicode MS"),
+      axis.title.y=element_blank()
+        )
+    ggsave(here::here('Output/Fig_2b_89mm.png'), f2b, height = 10, width = 8.8, units = 'cm')
+
+# f2c
+  ann_text_f2b <- data.frame(
+    r = c(-0.5, 0.5),lab = c("Negative", "Positive"),
+    genus = factor('Arenaria',levels = c("Arenaria", "Calidris","Charadrius","Haematopus","Limnodromus","Limosa","Numenius","Pluvialis","Tringa","Vanellus")))
+
+   f2c =
+   ggplot(fmr[n_by_nest>10 & slope_nest_certain%in%'yes'], aes(x=r))+#, fill = r_neg)) + 
+      geom_rect(xmin = -2, xmax = 0, ymin = -Inf, ymax = Inf,fill = 'grey80',inherit.aes = FALSE)+
+      geom_histogram() + geom_vline(xintercept = 0, lty =3, col = 'black')+
+      facet_wrap(~genus, nrow = 5) + 
+      geom_text(data = ann_text_f2b,y = 14, label = c("Negative", "Positive"), size = 0.7/scale_size, col = 'grey30')+
+      scale_x_continuous("Pearson's correlation coefficient for ♂ & ♀\nincubation bouts", expand = c(0, 0)) +
+      scale_y_continuous("Nests [count]", expand = c(0, 0)) +
+      #scale_fill_manual(values = c(male, female), name = 'Negative correltation')+
+      #labs(subtitle = "Based on individual bouts")  +
+      labs(tag = 'C')+
+      theme(text = element_text(family = "Arial Unicode MS")) +
+      theme_MB
+    ggsave('Output/Fig_2c.png', f2c, height = 10, width = 6.5, units = 'cm')
+
+# End 
+#' <br> 
+#' 
+#' ***
+#'  
+#+ fs1, fig.width=20*inch,fig.height=19.5*inch
+fs1= 
   ggplot() + 
-      geom_smooth(data = fm[n_by_nest>10], aes(x = bout_m, y = bout_f, group = pk_nest, lwd = slope_nest_certain), method = 'rlm', se = FALSE,  col = 'grey40', alpha = 0.8, method.args = list(maxit = 100))+ #linewidth = size_l,alpha = 0.2, col = slope_nest_neg
+      geom_smooth(data = fm[n_by_nest>10], aes(x = bout_m, y = bout_f, group = pk_nest, lwd = slope_nest_certain), method = 'rlm', se = FALSE,  col = 'grey40', alpha = 0.8, method.args = list(maxit = 200))+ #linewidth = size_l,alpha = 0.2, col = slope_nest_neg
       geom_abline(intercept = 0, slope = 1, lty =3, col = 'red')+
       facet_wrap(~scinam, ncol = 6, scales = "free") + 
       #v1: geom_text(data = fmrm, aes(x = bout_m_pos, y =bout_f_pos, 
@@ -772,97 +801,183 @@ f2a_free =
       #legend.box.background = element_rect(fill = "transparent"),
       #legend.key = element_rect(fill = "transparent")
       )
-ggsave(file = here::here("Output/Fig_2a_width-180mm_free-axis_v2.png"), f2a_free, width = 20, height = 16, units = "cm")
+ggsave(file = here::here("Output/Fig_S1_free.png"), fs1, width = 20*0.9, height = 16*0.9, units = "cm")       
 
-ann_text_f2b <- data.frame(r = c(-0.5, 0.5),lab = c("Negative", "Positive"),
-                       genus = factor('Arenaria',levels = c("Arenaria", "Calidris","Charadrius","Haematopus","Limnodromus","Limosa","Numenius","Pluvialis","Tringa","Vanellus")))
-f2b = 
-   ggplot(fmr[n_by_nest>10 & slope_nest_certain%in%'yes'], aes(x=r))+#, fill = r_neg)) + 
-      geom_rect(xmin = -2, xmax = 0, ymin = -Inf, ymax = Inf,fill = 'grey80',inherit.aes = FALSE)+
-      geom_histogram() + geom_vline(xintercept = 0, lty =3, col = 'black')+
-      facet_wrap(~genus, nrow = 5) + 
-      geom_text(data = ann_text_f2b,y = 14, label = c("Negative", "Positive"), size = 0.7/scale_size, col = 'grey30')+
-      scale_x_continuous("Pearson's correlation coefficient for ♂ & ♀\nincubation bouts", expand = c(0, 0)) +
-      scale_y_continuous("Nests [count]", expand = c(0, 0)) +
-      #scale_fill_manual(values = c(male, female), name = 'Negative correltation')+
-      #labs(subtitle = "Based on individual bouts")  +
-      theme(text = element_text(family = "Arial Unicode MS")) +
-      theme_MB
- ggsave('Output/Fig_2b.png', f2b, height = 6, width = 2.5)
+#+ fS2 fig.width=10*inch,fig.height=10*inch
+# prepare colors
+cols_f1 <- rev(c(brewer.pal(11, "Spectral")[1], brewer.pal(11, "Spectral")[4], brewer.pal(11, "Spectral")[7:11]))
 
-f2c = 
+# prepare data and tree
+ds2 =  fmr12[,list(r = median(r)), by = list(suborder,genus,animal,sp,scinam,species)]
+ds2[, scinam:=sub("_", " ", animal)]
+
+if (ladderize_ == FALSE) {
+    treei2 <- drop.tip(tree, setdiff(tree$tip.label, ds2$scinam))
+} else {
+   treei2 <- drop.tip(tree, setdiff(tree$tip.label, ds2$scinam)) %>% ladderize(right =TRUE)
+}
 
 
-blank = ggplot() + theme_void() 
-f2b_b = ggarrange(
-    blank, f1b,blank,
-    nrow=3, heights=c(0.4,6.7,2.9), align = 'v'
+# reconstrunct ancestral state using phytools
+colelab2 <- ds2$r
+names(colelab2) <- ds2$scinam
+fit2 <- phytools::fastAnc(treei2, colelab2, vars = FALSE, CI = FALSE)
+nd2 <- data.table(node = names(fit2), trait = as.numeric(fit2)) 
+td2<- data.table(node = ggtree::nodeid(treei2, names(colelab2)), trait = colelab2)
+ptr2 <- rbind(td2, nd2)
+ptr2[, node := as.numeric(node)]
+treei_c2 <- dplyr::full_join(treei2, ptr2, by = "node")
+
+# prepare phylogenetic contrasts
+r_pear2=ds2$r
+names(r_pear2)=ds2$scinam
+yourPics2 <- pic(x=r_pear2, phy=treei2)
+
+contrast_data2 <- data.table(
+  node = (Ntip(treei2) + 1):(Ntip(treei2) + Nnode(treei2)),
+  pic = yourPics2
+)
+
+treei_c2 <- treei_c2 %>%
+  left_join(contrast_data2, by = "node")
+
+# prepare genera images
+images2 = data.table(image = list.files(
+    path = here::here("Illustrations/for_tree2/"), 
+    pattern = "\\.png$", full.names = TRUE),
+    genus = sub("\\_.*", "", list.files(path = "Illustrations/for_tree2/", pattern = "\\.png$", 
+    full.names = FALSE)),
+    genus_y = c(6.5, 3.5, 20, 24.6, 11.5, 14,17,27.5, 9, 22.8),
+    genus_x = c(105,105,105,110,110,105,105,105,105,105),
+    col = c("lightgrey","lightgrey","lightgrey", "lightgrey", "darkgrey", "lightgrey", "darkgrey", "darkgrey", "lightgrey", "darkgrey"),
+    width_tree = c(0.9, 0.88, 0.83, 1.2, 0.9, 1.1, 1.12, 0.75,0.87, 0.88),
+    #width_tree = c(0.9, 0.85, 0.8, 1.2, 1.1, 1.08,0.9,0.91),
+    #width_tree = c(0.9, 0.72, 0.6, 1.67, 1.52, 1.6,0.8,1.07),
+    bird_size = c(23.5, 19, 15.5,43.75, 29, 39.75, 42, 26, 28, 30)
     )
-f1bc = ggarrange(
-    f1b_b,blank, f1c, blank,
-    ncol=4, widths=c(6.6,1.4,11, 1), align = 'h'
-    )
-f1abc = ggarrange(
-    f1a,f1bc,
-    nrow=2, heights=c(9.5,10), align = 'v'
+
+images2$width = image_info(image_read(images2$image))$width 
+images2$height = image_info(image_read(images2$image))$height 
+
+
+# add node indentifiers for vertical genus bars 
+treeid2 <- data.table(as_tibble(tidytree::as.treedata(treei2)))
+treeid2[, genus:=sub("\\ .*", "", label)]
+nod2 = treeid2[, min(parent), genus] %>% setnames(c('V1'),c('node'))
+images2 = merge(images2, nod2)
+images2[, name := NA]
+images2[genus=='Vanellus', node := 25]
+images2[genus=='Arenaria', node := 7]
+
+#default_size <- ggplot2:::check_subclass("point", "Geom")$default_aes$size
+
+# plot tree
+p2 <- ggtree::ggtree(treei_c2, ladderize = ladderize_, right = TRUE) + #layout = "circular", 
+    geom_tree(aes(color = trait), continuous = "colour", size = 1) +
+    geom_tiplab(offset = 0.5, fontface = "italic", colour = "grey30", size = 2.35)+
+    scale_color_gradientn(colours = (cols_f1), name = "Assortative mating") +
+    geom_image(data = images2, 
+             aes(
+                x = genus_x, y = genus_y, image = image, size = I(width_tree/10)), by='width')+#, size = 0.1) +#inherit.aes = FALSE) +  # Adjust x and size as needed #, by = "width" 
+    geom_point(data = data.frame(x = 97.5, y = c(7)), aes(x =x, y = y), color = "darkgrey", shape = 15, size = 1) +
+    geom_point(data = data.frame(x = 97.5, y = c(23)), aes(x =x, y = y), color = "darkgrey", shape = 15, size = 1) +
+    #geom_point(
+    #        aes(x = x, y = y, size = abs(pic)), #sqrt(abs(pic/pi))),
+    #        fill = "grey90", color = "grey50", pch = 21) +
+    #scale_size_identity()+
+    #scale_size(range = c(0.1,2.5))+
+    coord_cartesian(xlim = c(0,110))+
+    guides(size = "none") + 
+    labs(tag = 'C') +
+    #theme_tree2()+
+    theme_MB + 
+    theme(  #legend.position="none",
+            plot.tag.position=c(0.06,.97),
+            panel.border = element_blank()
+            #plot.background = element_rect(fill = "transparent",
+                                  #  colour = NA_character_)
+        #legend.title = element_text(face = "bold", hjust = 0.5),
+        #plot.margin = unit(c(0,0, 0, 0), "cm"),
+        #plot.tag = element_text(size = 9)    
     )
 
-#' <br> 
-#' 
-#' ***
-#' 
+p_g2 = p2
 
-#+ f2c, fig.width = 6, fig.height = 5
-  # within and across species  
-       # in r and suborder specific
-        give.n <- function(x){
-          return(c(y = 1.1, label = length(x))) 
-          # experiment with the multiplier to find the perfect position
-        }
-      # define color for genus
-        go=data.frame(genus=c("Arenaria","Calidris","Tringa","Limnodromus", "Limosa","Numenius", "Charadrius", "Vanellus", "Pluvialis","Haematopus"),
-        cols=c(brewer.pal(11,"Spectral")[1:6],brewer.pal(11,"Spectral")[7:8],brewer.pal(11,"Spectral")[10:11]), stringsAsFactors=FALSE)
-      
-        ggplot(fmr[scinam%in%unique(fmr_sp$scinam[fmr_sp$n>2])], aes(y = fct_reorder(species, r, .fun = median, .desc =TRUE), x = r, fill = genus)) + 
-            geom_boxplot(
-              lwd = 0.25,
-              outlier.size = 0.25,
-              outlier.color = "grey40")+
-            stat_summary(fun.data = give.n, geom = "text", size = 1.5, col = "grey30") +
-            #scale_x_continuous(lim = c(-1,1))+
-            scale_fill_manual(values = go$cols, name = 'Genus')+
-            facet_grid(rows = vars(forcats::fct_relevel(suborder, "Scolopaci", "Charadrii")), scales = "free_y",space = "free_y") +
-            geom_vline(xintercept = 0, lty = 3)+
-            xlab("Pearson's r for ♀ & ♂ bout length\n[for each nest]") +
-            theme_MB +
-            theme(
-              panel.grid.major.y = element_line(color = "grey90", size = 0.2),
-              text = element_text(family = "Arial Unicode MS"),
-              axis.title.y=element_blank()
-                )
-      #ggsave(here::here('Output/Boxplot_fm-r.png'), height = 4, width = 3.5)
-    # within and across genera
-    ggplot(fm[n_by_nest>10], aes(x=r, fill = r_neg)) + 
-      geom_histogram() + geom_vline(xintercept = 0, lty =3, col = 'red')+
-      facet_wrap(~genus, nrow = 5) + 
-      scale_x_continuous("Pearson's correlation coefficient for ♂ & ♀", expand = c(0, 0)) +
-      scale_y_continuous("Nests [count]", expand = c(0, 0)) +
-      scale_fill_manual(values = c(male, female), name = 'Negative correltation')+
-      labs(subtitle = "Based on individual bouts")  +
-      theme(text = element_text(family = "Arial Unicode MS")) +
-      theme_MB
-    ggsave('Output/cor_fm_r-bout_hist_genus.png', height = 4, width = 2.5)
-#' #### Betweena & within nest variation in rlm 
-#+ fig.width=6,fig.height=6
-  ggplot(fm[n_by_nest>10],aes(x = bout_m, y = bout_f, group = pk_nest, col = slope_nest_neg)) + 
-    geom_smooth(method = 'rlm', se = FALSE, alpha = 0.2, linewidth = size_l, method.args = list(maxit = 100))+
-    scale_color_manual(values=c(male, female))+ 
-    geom_abline(intercept = 0, slope = 1, lty =3)+
-    #stat_cor(aes(label = ..r.label..),  label.x = 3, size = 2) + 
-    facet_wrap(~scinam) +
-    coord_cartesian(xlim = c(0, 30),ylim = c(0, 30)) +
-    scale_x_continuous("♂ bout [hours]", expand = c(0, 0), breaks = c(0,10,20)) +
-    scale_y_continuous("♀ bout [hours]", expand = c(0, 0), breaks = c(0,10,20)) +
-    labs(title = "Based on individual bouts")+
-    theme_MB
-# End        
+# add genus lines
+for (j in images2$genus) {
+    # j = 'Charadrius'
+    ij2 <- images2[genus == j]
+    # p_l <- p_l + geom_cladelabel(node = cj$Node, label = cj$Label, color = c(cj$col, "black"), align = TRUE, barsize = 1.5)
+    p_g2 <-
+        p_g2 +
+        ggtree::geom_cladelabel(node = ij2$node, label = ij2$name, color = c(ij2$col), barsize = 1, offset = 34.5,fontsize = font_size) # angle = "auto")#
+    # ggtree::geom_cladelab(node = c_s$Node, label = c_s$Label, barcolor = c_s$col, textcolor = sub_t, align = TRUE, barsize = 2, hjust = "left", offset.text = 6)
+    # ggsave(here::here(glue('Output/temp_phylo_lader_{j}.png')))
+    # print(j)
+}
+
+#p_g
+
+# use this to add horizontal lines
+#p_g = p_g + geom_tiplab(aes(subset = (node %in% c(1)), label = ""), offset = 27, color = "lightgrey", align = TRUE, linetype = 1, vjust = 1, linesize = font_size) # treeid[treeid$label == 'xenicus_gilviventris','label']
+
+
+# add scale 
+qn2 <- scales::rescale(quantile(ds2$r), probs = seq(0, 1, length.out = length(cols_f1)))
+
+dens2 <- density(ds2$r, n = 2^12)
+den2 <- data.table(x = dens2$x, y = dens2$y)
+#den <- den[x > log10(0.99) & x < log10(50.01)]
+
+f_den <-
+    ggplot() +
+    geom_segment(data = den2, aes(x, y, xend = x, yend = 0, colour = x)) +
+    scale_color_gradientn(
+        colours = cols_f1, # viridis(10),
+        values = qn2 # c(0, seq(qn01[1], qn01[2], length.out = 18), 1)
+    ) +
+    geom_vline(xintercept = median(ds2$r), lty =3, linewidth = 0.5, color = 'red')+
+    #geom_line(data = den_o, aes(x = x, y = y), color = osc) +
+    #geom_line(data = den_s, aes(x = x, y = y), color = sub) +
+    # geom_segment(data = den_s, aes(x, y, xend = x, yend = 0)) +
+    # geom_segment(data = den_s, aes(x, y, xend = x, yend = 0)) +
+    # ggplot() +
+    # geom_density(data = d, aes(x = log10(element_types_extrapol_mean), col = clade))+
+    # geom_density(data = d, aes(x = log10(element_types_extrapol_mean)))
+    # geom_line(data = den_o, aes(x =x, y = y), color = osc) +
+    # geom_line(data = den_s, aes(x =x, y = y), color = sub) +
+    scale_x_continuous(breaks = c(0, 0.5, 1), labels = c('0','0.5','1')) +
+    scale_y_continuous(expand = c(0,0)) +
+    ylab("") +
+    xlab("Median Pearson's r\n [for within nest ♀ & ♂ bouts]") +
+    theme_bw() +
+    theme(
+        text = element_text(family = fam),
+        legend.position = "none",
+        axis.line.x = element_line(color = ax_lines, linewidth = 0.25),
+        panel.grid.major = element_blank(), # panel.grid.major = element_line(size = 0.25),
+        panel.grid.minor = element_blank(), # element_line(size = 0.25),
+        # panel.border = element_rect(size=0.25),
+        panel.border = element_blank(),
+        # axis.line.x.bottom = element_line(color = ax_lines, size = 0.25),
+        # axis.line.y.left   = element_line(color = ax_lines, size = 0.25),
+        axis.ticks.length = unit(1, "pt"), # axis.ticks.length=unit(.05, "cm"),
+        axis.ticks = element_line(linewidth = 0.25, color = ax_lines),
+        # plot.tag.position = c(0.96, 0.96),
+        # plot.tag = element_text(size = 7.5), # size = 10
+        axis.text = element_text(size = 6),
+        axis.title = element_text(size = 7, colour="grey30"),
+        axis.line.y = element_blank(), axis.text.y = element_blank(),
+        axis.ticks.y = element_blank(), axis.title.y = element_blank(),
+        plot.background = element_rect(fill = "transparent", colour = NA)
+    )
+
+# merge and export
+fx = p_g2 + theme(legend.position = "none") + inset_element(f_den, 
+left = 0.10, right = 0.30,
+bottom = 0.03, top = 0.308, 
+on_top = TRUE, align_to = "full")
+
+ggsave(here::here("Output/Fig_X.png"), fx, width = 11, height = 10, units ='cm')
+
+# end
