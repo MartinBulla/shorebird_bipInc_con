@@ -15,7 +15,8 @@
 #+ r setup, include=FALSE 
 knitr::opts_chunk$set(message = FALSE, warning = FALSE, cache = TRUE)
 
-# TODO:check whether densityscale in trees are correct in fs2 surely not
+# TODO:check whether densityscale in trees are correct in fs2 surely not and fig 1c likely also not
+# TODO: check what happens with within nest correlations coefficients if day of incubation is controlled for
 
 #' ##### Code to load tools & data
   # constants
@@ -218,7 +219,7 @@ wtd.quantile(a$r_sp, a$n_by_sp, probs = c(0.025,0.5,0.975));wtd.mean(a$r_sp, a$n
                                               ymin = ymin, ymax = ymax))
     }
     inset_dunl =
-      ggplot(dd_n10[n_by_pop>10 & scinam == 'Calidris alpina'],aes(x = med_m, y = med_f, group = pop, weight=n)) + 
+      ggplot(dd_n10[n_by_pop>10 & scinam == 'Calidris alpina'],aes(x = med_m, y = med_f, group = pop, weight=n_fm)) + 
         geom_smooth(method = 'rlm', se = FALSE, col = 'grey40', aes(lwd = slope_pop_certain))+
         scale_linewidth_manual(values=c(.25, size_l), name = "Slope certain") +
         guides(lwd="none") + 
@@ -227,7 +228,7 @@ wtd.quantile(a$r_sp, a$n_by_sp, probs = c(0.025,0.5,0.975));wtd.mean(a$r_sp, a$n
         theme(panel.border = element_rect(colour="grey80", linewidth=0.15, fill = NA))
 
     inset_sesa = 
-      ggplot(dd_n10[n_by_pop>10 & scinam == 'Calidris pusilla'],aes(x = med_m, y = med_f, group = pop, weight=n)) + 
+      ggplot(dd_n10[n_by_pop>10 & scinam == 'Calidris pusilla'],aes(x = med_m, y = med_f, group = pop, weight=n_fm)) + 
         geom_smooth(method = 'rlm', se = FALSE, col = 'grey40', aes(lwd = slope_pop_certain))+
         scale_linewidth_manual(values=c(.25, size_l), name = "Slope certain") +
         guides(lwd="none") + 
@@ -236,7 +237,7 @@ wtd.quantile(a$r_sp, a$n_by_sp, probs = c(0.025,0.5,0.975));wtd.mean(a$r_sp, a$n
         theme(panel.border = element_rect(colour="grey80", linewidth=0.15, fill = NA))
 
     inset_kepl = 
-      ggplot(dd_n10[n_by_pop>10 & scinam == "Charadrius alexandrinus"],aes(x = med_m, y = med_f, group = pop, weight=n)) + 
+      ggplot(dd_n10[n_by_pop>10 & scinam == "Charadrius alexandrinus"],aes(x = med_m, y = med_f, group = pop, weight=n_fm)) + 
         geom_smooth(method = 'rlm', se = FALSE, col = 'grey40', aes(lwd = slope_pop_certain))+
         scale_linewidth_manual(values=c(.25, size_l), name = "Slope certain") +
         guides(lwd="none") + 
@@ -245,7 +246,7 @@ wtd.quantile(a$r_sp, a$n_by_sp, probs = c(0.025,0.5,0.975));wtd.mean(a$r_sp, a$n
         theme(panel.border = element_rect(colour="grey80", linewidth=0.15, fill = NA))
     
     inset_amgp =
-      ggplot(dd_n10[n_by_pop>10 & scinam == "Pluvialis dominica"],aes(x = med_m, y = med_f, group = pop, weight=n)) + 
+      ggplot(dd_n10[n_by_pop>10 & scinam == "Pluvialis dominica"],aes(x = med_m, y = med_f, group = pop, weight=n_fm)) + 
         geom_smooth(method = 'rlm', se = FALSE, col = 'grey40', aes(lwd = slope_pop_certain))+
         scale_linewidth_manual(values=c(.25, size_l), name = "Slope certain") +
         guides(lwd="none") + 
@@ -257,7 +258,7 @@ wtd.quantile(a$r_sp, a$n_by_sp, probs = c(0.025,0.5,0.975));wtd.mean(a$r_sp, a$n
       med_m  = ggplot_build(f1a)$layout$panel_params[[2]]$x.range[2]-(ggplot_build(f1a)$layout$panel_params[[2]]$x.range[2]-ggplot_build(f1a)$layout$panel_params[[2]]$x.range[1])*0.4, 
       med_f = ggplot_build(f1a)$layout$panel_params[[2]]$y.range[1]+(ggplot_build(f1a)$layout$panel_params[[2]]$y.range[2]-ggplot_build(f1a)$layout$panel_params[[2]]$y.range[1])*0.4,lab = "Populations",
       scinam = factor('Calidris alpina',levels = dd_n10[n_by_pop>10, levels(factor(scinam))]),
-      n = 1)
+      n_fm = 1)
 
     f1a_ = 
     f1a +
@@ -291,11 +292,11 @@ wtd.quantile(a$r_sp, a$n_by_sp, probs = c(0.025,0.5,0.975));wtd.mean(a$r_sp, a$n
         xmax=ggplot_build(f1a)$layout$panel_params[[15]]$x.range[2]) +
     geom_text(data = ann_text,label = "Populations", size = 1.8, hjust = 0, vjust = 0, col = 'grey30')    
 
-  #export ggsave(file = here::here("Output/Fig_1A_width-180mm.png"), f1a_, width = 20, height = 10, units = "cm")
+  #export ggsave(file = here::here("Output/Fig_1A_width-180mm_test.png"), f1a_, width = 20, height = 10, units = "cm")
 
 # f1b fig.width=10*inch,fig.height=10*inch
 f1b =
-    ggplot(dd_n10[n_by_sp>10],aes(x = med_m, y = med_f, group = sp, weight=n, color = suborder)) + 
+    ggplot(dd_n10[n_by_sp>10],aes(x = med_m, y = med_f, group = sp, weight=n_fm, color = suborder)) + 
       #geom_point(aes(size = n), alpha = 0.5)+#geom_point(size = 0.5, alpha = 0.5) + 
       geom_smooth(method = 'rlm', se = FALSE, alpha = 0.5, aes(lwd = slope_sp_certain))+ #col = 'grey40', 
       geom_abline(intercept = 0, slope = 1, lty =3, col = 'red')+
@@ -516,7 +517,7 @@ f1bc = ggarrange(
     ncol=4, widths=c(6.6,1.4,11, 1), align = 'h'
     )
 f1abc = ggarrange(
-    f1a,f1bc,
+    f1a_,f1bc,
     nrow=2, heights=c(9.5,10), align = 'v'
     )
 
@@ -627,7 +628,7 @@ f1abc
       ] # same as fmr = fm[!(is.na(r) | duplicated(paste(r, pk_nest))) ]
 
       # median r based on certain rs only, except for Pluvialis sqatarola having only uncertain ones, while making placement for the free axis (both below opitons work, but not 100% because they forget that chat gpt sets the pedding to the axis - TODO:check and adjust - see the threat there)
-      #TODO:limit coordinates in free, to zoom in a little
+  
       # first option
       fmrm = fmr[slope_nest_certain%in%'yes', list(
         r = median(r, na.rm = TRUE),
@@ -666,7 +667,19 @@ f1abc
       fm10=fm[n_by_nest>10]
       fmrm <- fmrm %>%
           mutate(scinam = factor(scinam, levels = unique(fm10$scinam)))
-#' 
+
+    # keep only certain slopes and Pluvialis squatarola
+     fmr1 = fmr[n_by_nest>10 & slope_nest_certain%in%'yes']
+     fmr2 = fmr[n_by_nest>10 & scinam =='Pluvialis squatarola']# try removing this one
+     fmr12 = rbind (fmr1,fmr2)
+
+    # descriptive stats 
+    length(unique(fm10$pk_nest)) # n nests in f2a
+    nrow(fm10) # n bouts in f2a
+    length(unique(fm10$scinam)) # n nests in f2a
+    nrow(fmr1)
+    nrow(fm)
+
 #+ f2 fig.width=20*inch,fig.height=20*inch
 # f2a  
   f2a_lim = 
@@ -704,12 +717,8 @@ f1abc
   ggsave(file = here::here("Output/Fig_2a_width-180mm_fixed-axis-limits30.png"), f2a_lim, width = 20, height = 11, units = "cm")
 
 
-
 # f2b
   # within and across species  
-     fmr1 = fmr[n_by_nest>10 & slope_nest_certain%in%'yes']
-     fmr2 = fmr[n_by_nest>10 & scinam =='Pluvialis squatarola']
-     fmr12 = rbind (fmr1,fmr2)
        # in r and suborder specific
         give.n <- function(x){
           return(c(y = 1.1, label = length(x))) 
@@ -888,7 +897,7 @@ p2 <- ggtree::ggtree(treei_c2, ladderize = ladderize_, right = TRUE) + #layout =
     #scale_size(range = c(0.1,2.5))+
     coord_cartesian(xlim = c(0,110))+
     guides(size = "none") + 
-    labs(tag = 'C') +
+    labs(tag = 'D') +
     #theme_tree2()+
     theme_MB + 
     theme(  #legend.position="none",
@@ -979,5 +988,38 @@ bottom = 0.03, top = 0.308,
 on_top = TRUE, align_to = "full")
 
 ggsave(here::here("Output/Fig_X.png"), fx, width = 11, height = 10, units ='cm')
+
+#' ### Text stats and Table S1 & S2
+# descritpitve within species r
+v = fmr[n_by_nest>10 & slope_nest_certain%in%'yes']
+nrow(v)
+summary(v$r)
+
+# r mean controlled for
+mi = lmer(r~1+(1|genus) + (1|species) + (1|lat_pop), data = v)
+#apply(sim(mi, n.sim = n_sim)@fixef, 2, quantile, prob=c(0.025, 0.5, 0.975))
+table_s1 =m_out(mi, "Table S1", dep = 'r', save_sim = FALSE)
+
+# descrittion within species with and without incubation period
+m0 = lmer(scale(bout_f)~scale(bout_m)+(1|genus) + (bout_m|species) + (1|lat_pop), data = u,
+control = lmerControl(optimizer = "Nelder_Mead")
+) # include randome slope or not?
+table_s2a =m_out(m0, "Table S2a", dep = 'bout_f', save_sim = FALSE)
+#summary(m0)
+#summary(glht(m0))
+#apply(sim(m0, n.sim = n_sim)@fixef, 2, quantile, prob=c(0.025, 0.5, 0.975))
+
+mb = lmer(scale(bout_f)~poly(bout_start_j,2)+scale(bout_m)+(1|genus) + (bout_m|species) + (1|lat_pop), data = u,
+control = lmerControl(optimizer = "Nelder_Mead"))
+table_s2b =m_out(m0, "Table S2b", dep = 'bout_f', save_sim = FALSE)
+#summary(mb)
+#summary(glht(m))
+#apply(sim(mb, n.sim = n_sim)@fixef, 2, quantile, prob=c(0.025, 0.5, 0.975))
+
+MuMIn::model.sel(m0,mb)
+
+# export
+rbind(table_s1, table_s2a, table_s2b) %>% kableExtra::kbl() %>%
+  kableExtra::kable_paper("hover", full_width = F)
 
 # end

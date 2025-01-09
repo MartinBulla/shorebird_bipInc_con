@@ -1,4 +1,4 @@
-## Analyses of partner similarity in incubation bouts of biparenal shorebird using data from Bulla *et al.* 2016, Nature
+## Analyses of partner similarity in incubation bouts of biparenal shorebirds using data from Bulla *et al.* 2016, Nature
  
 ### **Overview**
 
