@@ -34,8 +34,33 @@ getime = function (x) {ifelse(is.na(x), as.numeric(NA), as.numeric(difftime(x, t
 #' @export
 getDay = function (x) {as.Date(trunc(x, "day"))}
 
+# functions for the ggtree
+source(here::here("R/z_offspring.R"))
+source(here::here("R/z_as-tibble.R"))
+source(here::here("R/z_ancestor.R"))
+add_class <- function(x, name) {
+    xx <- setdiff(name, class(x))
+    if (length(xx) > 0) {
+        class(x) <- base::union(xx, class(x))
+    }
+    return(x)
+}
+
+getnode <- function(...) {
+    if (hasArg(env)) {
+        env <- list(...)$env
+    } else {
+        env <- get("last_plot.phylo", envir = .PlotPhyloEnv)
+    }
+    xy <- unlist(locator(n = 1))
+    points(xy[1], xy[2]) 
+    d <- sqrt((xy[1] - env$xx)^2 + (xy[2] - env$yy)^2)
+    ii <- which(d == min(d))[1]
+    ii
+}
+
 # load/install packages
-  packages = c('ape','arm','RColorBrewer','data.table', 'effects', 'forcats', 'ggExtra', 'ggnewscale', 'ggplot2', 'ggthemes', 'glue',  'grid','gridExtra', 'here', 'Hmisc','htmlTable', 'lattice', 'lubridate', 'magrittr', 'maptools', 'multcomp', 'pals','patchwork', 'performance', 'phangorn','phytools','plyr','raster','reshape2', 'sandwich','scales','stringr','readxl','zoo', 'gt', 'tidyverse', 'ggpubr')
+  packages = c('ape','arm','RColorBrewer','data.table', 'effects', 'forcats', 'ggExtra', 'ggnewscale', 'ggimage', 'ggplot2', 'ggtext','ggthemes', 'ggtree','glue',  'grid','gridExtra', 'here', 'Hmisc','htmlTable', 'lattice', 'lubridate', 'magick', 'magrittr', 'maptools', 'multcomp', 'pals','patchwork', 'performance', 'phangorn','phytools','plyr','raster','reshape2', 'sandwich','scales','stringr','readxl','zoo', 'gt', 'tidyverse', 'ggpubr')
   sapply(packages, function(x) suppressPackageStartupMessages(using(x)) )
 
 # Customized ggplot themes
@@ -128,7 +153,7 @@ getDay = function (x) {as.Date(trunc(x, "day"))}
       #dt=fm[pk_nest=='AMGP barr 2010 AMGP230 1']  
       # Extract coefficients
       rlm_model <- tryCatch(
-        rlm(bout_f ~ bout_m, data = dt, maxit = 100),
+        rlm(bout_f ~ bout_m, data = dt, maxit = 200),
         error = function(e) return(NULL)
       )
       coef_estimates <- coef(rlm_model)

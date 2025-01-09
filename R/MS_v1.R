@@ -27,6 +27,10 @@ knitr::opts_chunk$set(message = FALSE, warning = FALSE, cache = TRUE)
     inch = 0.393701 
     nsim = 5000
     scale_size = 0.352778 # a scaling factor for the size outside ggplot theme (which is in mm) to match point size in the theme
+
+    font_size = 2.5 # in the TREE
+    ladderize_ = TRUE # ladderize TREE?
+
    
 
   # packages and functions
@@ -122,7 +126,7 @@ knitr::opts_chunk$set(message = FALSE, warning = FALSE, cache = TRUE)
       n_days=as.numeric(difftime(max(datetime_off),min(datetime_on),days))),
       by = list(suborder,genus,animal,sp,scinam,species,breeding_site,pop, lat_pop, pop_lat, year,nest, nn,pk_nest, pop_wing_f,pop_wing_m,app, tidal, tidal_pop,col_)
       ]
-  
+      dd_n[, n_fm:=ifelse(n_f>n_m, n_f, n_m)]
     # limit data
       dd_n=dd_n[which(!is.na(dd_n$med_f) & !is.na(dd_n$med_m)),]
       dd_n10 = dd_n[n>=10 & n_f>=5 & n_m>=5]#; nrow(dd_n10)#; dd_n10[n_by_pop>10,length(unique(pop))]
@@ -172,7 +176,7 @@ wtd.quantile(a$r_sp, a$n_by_sp, probs = c(0.025,0.5,0.975));wtd.mean(a$r_sp, a$n
 
 #+ f1 fig.width=20*inch,fig.height=19.5*inch
   f1a = 
-  ggplot(dd_n10[n_by_sp>10],aes(x = med_m, y = med_f, group = scinam, weight=n)) + 
+  ggplot(dd_n10[n_by_sp>10],aes(x = med_m, y = med_f, group = scinam, weight=n_fm)) + 
       geom_point(aes(size = n, col = suborder), alpha = 0.5)+#geom_point(size = 0.5, alpha = 0.5) + 
       geom_smooth(method = 'rlm', se = FALSE,  col = 'grey40', aes(lwd = slope_sp_certain))+ #linewidth = size_l,alpha = 0.2,
       geom_abline(intercept = 0, slope = 1, lty =3, col = 'red')+
@@ -180,7 +184,7 @@ wtd.quantile(a$r_sp, a$n_by_sp, probs = c(0.025,0.5,0.975));wtd.mean(a$r_sp, a$n
 
       scale_color_manual(values=c(male, female), name = "Suborder")+ 
       scale_linewidth_manual(values=c(.25, size_l), name = "Slope certain")+ 
-      scale_size(name = "Number of bouts", breaks = c(10, 50, 100, 200, 400)) + 
+      scale_size(name = "# of ♀-♂ bout\npairs", breaks = c(10, 100, 200)) + 
       #scale_size(breaks = c(1,15,30), name = 'n days') +
 
       #stat_cor(aes(label = ..r.label..),  label.x = 3, size = 2) + 
@@ -318,37 +322,6 @@ f1b =
   #export ggsave(file = here::here("Output/Fig_1B_width-90mm.png"), f1b, width = 6.6, height = 6.7, units = "cm")
 
 # f1c fig.width=10*inch,fig.height=10*inch
-require("ggtext")
-require('ggtree')
-library('ggimage')
-library('magick')
-font_size = 2.5
-ladderize_ = TRUE
-source(here::here("R/z_offspring.R"))
-source(here::here("R/z_as-tibble.R"))
-source(here::here("R/z_ancestor.R"))
-add_class <- function(x, name) {
-    xx <- setdiff(name, class(x))
-    if (length(xx) > 0) {
-        class(x) <- base::union(xx, class(x))
-    }
-    return(x)
-}
-
-getnode <- function(...) {
-    if (hasArg(env)) {
-        env <- list(...)$env
-    } else {
-        env <- get("last_plot.phylo", envir = .PlotPhyloEnv)
-    }
-    xy <- unlist(locator(n = 1))
-    points(xy[1], xy[2]) 
-    d <- sqrt((xy[1] - env$xx)^2 + (xy[2] - env$yy)^2)
-    ii <- which(d == min(d))[1]
-    ii
-}
-
-
 # prepare colors
 cols_f1 <- rev(c(brewer.pal(11, "Spectral")[1], brewer.pal(11, "Spectral")[4], brewer.pal(11, "Spectral")[7:11]))
 
@@ -544,12 +517,12 @@ f1abc = ggarrange(
     f1a,f1bc,
     nrow=2, heights=c(9.5,10), align = 'v'
     )
+
 if (save_plot == TRUE) {
 ggsave(here::here("Output/Fig_1_width-180mm.png"), f1abc, width = 20, height = 19.7, units ='cm', bg='white')
 x <- image_read(here::here("Output/Fig_1_width-180mm.png"), density=300)
 y <- image_trim(x) # width = 94.5cm, height = 88 (conversion factor 1181/100 )
 image_write(y, path = "Output/Fig_1_width-178mm_trimmed.png", format = "png", density = 300)
-
 } 
 
 f1abc
@@ -593,6 +566,14 @@ f1abc
     setnames(fm, old = 'bout_length', new = 'bout_f')
     fm[ ,(c('sex', 'bird_ID', 'sex_next')) := NULL]
 
+  # shorten names for plotting  
+    fm[scinam=="Charadrius alexandrinus", scinam:= 'Char. alexandrinus']
+    fm[scinam=="Charadrius semipalmatus", scinam:= 'Char. semipalmatus']
+    fm[scinam=="Haematopus ostralegus", scinam:= 'Haem. ostralegus']
+    fm[scinam=="Haematopus bachmani", scinam:= 'Haem. bachmani']
+    fm[scinam=="Limnodromus scolopaceus" , scinam:= 'Limn. scolopaceus']
+    fm[scinam=="Numenius madagascariensis" , scinam:= 'N. madagascariensis']
+
   # estimate within pair bout correlations
     fm[, n_by_nest := .N, pk_nest] #summary(fm$n_by_nest); fm[n_by_nest>6, length(unique(pk_nest))]
     # pearson
@@ -601,7 +582,7 @@ f1abc
       fm[n_by_nest>=5 & !r_neg%in%'yes', r_neg := 'no']
 
     # rlm
-      fm[n_by_nest>=5,  slope_nest := rlm(bout_f ~ bout_m, maxit = 100)  %>% coef  %>% magrittr::extract(2), by = pk_nest] 
+      fm[n_by_nest>=5,  slope_nest := rlm(bout_f ~ bout_m, maxit = 200)  %>% coef  %>% magrittr::extract(2), by = pk_nest] 
       fm[n_by_nest>=5 & slope_nest<0, slope_nest_neg := 'yes']
       fm[n_by_nest>=5 & !slope_nest_neg%in%'yes', slope_nest_neg := 'no']
       fm[n_by_nest>=5, slope_nest_certain := simulate_rlm_no_weights(.SD), by = pk_nest]
@@ -612,7 +593,7 @@ f1abc
       fm5 = fm[n_by_nest>=5]
       problematic_groups <- lapply(unique(fm5$pk_nest), function(g) {
         tryCatch({
-          fm5[pk_nest == g, slope_nest := rlm(bout_f ~ bout_m, maxit = 100)  %>% coef  %>% magrittr::extract(2)]
+          fm5[pk_nest == g, slope_nest := rlm(bout_f ~ bout_m, maxit = 200)  %>% coef  %>% magrittr::extract(2)]
           NULL  # Return NULL if no warning
         }, warning = function(w) {
           list(group = g, warning = w$message)  # Capture the group and warning message
@@ -629,7 +610,7 @@ f1abc
       }
       }
     
-    fm = fm[!pk_nest =="AMGP chur 2013 13AMGP03W 1"] # remove the group where rlm failed to converge #ggplot(x, aes(x = bout_m, y = bout_f)) + geom_point()
+    #fm = fm[!pk_nest =="AMGP chur 2013 13AMGP03W 1"] # remove the group where rlm failed to converge #ggplot(x, aes(x = bout_m, y = bout_f)) + geom_point()
 
     # aggregate
       fmr = fm[!is.na(r), list(
@@ -644,6 +625,7 @@ f1abc
       ] # same as fmr = fm[!(is.na(r) | duplicated(paste(r, pk_nest))) ]
 
       # median r based on certain rs only, except for Pluvialis sqatarola having only uncertain ones, while making placement for the free axis (both below opitons work, but not 100% because they forget that chat gpt sets the pedding to the axis - TODO:check and adjust - see the threat there)
+      #TODO:limit coordinates in free, to zoom in a little
       # first option
       fmrm = fmr[slope_nest_certain%in%'yes', list(
         r = median(r, na.rm = TRUE),
@@ -688,7 +670,7 @@ f1abc
 #+ f2 fig.width=20*inch,fig.height=20*inch
   f2a = 
   ggplot() + 
-      geom_smooth(data = fm10, aes(x = bout_m, y = bout_f, group = pk_nest, lwd = slope_nest_certain), method = 'rlm', se = FALSE,  col = 'grey40', alpha = 0.8, method.args = list(maxit = 100))+ #linewidth = size_l,alpha = 0.2, col = slope_nest_neg
+      geom_smooth(data = fm10, aes(x = bout_m, y = bout_f, group = pk_nest, lwd = slope_nest_certain), method = 'rlm', se = FALSE,  col = 'grey40', alpha = 0.8, method.args = list(maxit = 200))+ #linewidth = size_l,alpha = 0.2, col = slope_nest_neg
       geom_abline(intercept = 0, slope = 1, lty =3, col = 'red')+
       geom_text(data = fmrm, aes(x = 0, y =50, 
       label = paste('r =', round(r,2))), #paste(expression(paste(italic("r"), "="), round(r,2)))), # 
@@ -701,7 +683,7 @@ f1abc
 
       #stat_cor(aes(label = ..r.label..),  label.x = 3, size = 2) + 
       #facet_wrap(~pop) +
-      #coord_cartesian(xlim = c(0, 16),ylim = c(0, 16)) +
+      #coord_cartesian(xlim = c(0, 30),ylim = c(0, 30)) +
       scale_x_continuous("♂ bout [hours]") +
       scale_y_continuous("♀ bout [hours]") +
       #labs(subtitle = "A")+
@@ -718,7 +700,41 @@ f1abc
       #legend.box.background = element_rect(fill = "transparent"),
       #legend.key = element_rect(fill = "transparent")
       )
-ggsave(file = here::here("Output/Fig_2a_width-180mm_fixed-axis.png"), f2a, width = 20, height = 11, units = "cm")
+ggsave(file = here::here("Output/Fig_2a_width-180mm_fixed-axis-shortNames.png"), f2a, width = 20, height = 11, units = "cm")
+
+f2a_lim = 
+  ggplot() + 
+      geom_smooth(data = fm10, aes(x = bout_m, y = bout_f, group = pk_nest, lwd = slope_nest_certain), method = 'rlm', se = FALSE,  col = 'grey40', alpha = 0.8, method.args = list(maxit = 200))+ #linewidth = size_l,alpha = 0.2, col = slope_nest_neg
+      geom_abline(intercept = 0, slope = 1, lty =3, col = 'red')+
+      geom_text(data = fmrm, aes(x = 0, y =30, 
+      label = paste('r =', round(r,2))), #paste(expression(paste(italic("r"), "="), round(r,2)))), # 
+      hjust = 0, vjust =1, size = 2) +
+      #      ggpubr::stat_cor(method="pearson",size = 2, cor.coef.name = 'r',aes(x = bout_m, y = bout_f, label = ..r.label..), inherit.aes = FALSE) +
+      #scale_color_manual(values=c(male, female), name = "Slope negative")+ 
+      scale_linewidth_manual(values=c(.25, size_l), name = "Slope certain")+ 
+    
+      #scale_size(breaks = c(1,15,30), name = 'n days') +
+
+      #stat_cor(aes(label = ..r.label..),  label.x = 3, size = 2) + 
+      #facet_wrap(~pop) +
+      coord_cartesian(xlim = c(0, 30),ylim = c(0, 30)) +
+      scale_x_continuous("♂ bout [hours]") +
+      scale_y_continuous("♀ bout [hours]") +
+      #labs(subtitle = "A")+
+      labs(tag = 'A')+
+      facet_wrap(~scinam, ncol = 8)+#, scales = "free") + 
+      theme_MB + 
+      theme(strip.background = element_blank()
+           #panel.background = element_rect(fill = "transparent",
+            #                     colour = NA_character_), # necessary to avoid drawing panel outline
+    
+          #plot.background = element_rect(fill = "transparent",
+           #                         colour = NA_character_), # necessary to avoid drawing plot outline
+      #legend.background = element_rect(fill = "transparent"),
+      #legend.box.background = element_rect(fill = "transparent"),
+      #legend.key = element_rect(fill = "transparent")
+      )
+ggsave(file = here::here("Output/Fig_2a_width-180mm_fixed-axis-limits30.png"), f2a_lim, width = 20, height = 11, units = "cm")
 
 
 f2a_free = 
@@ -757,6 +773,39 @@ f2a_free =
       #legend.key = element_rect(fill = "transparent")
       )
 ggsave(file = here::here("Output/Fig_2a_width-180mm_free-axis_v2.png"), f2a_free, width = 20, height = 16, units = "cm")
+
+ann_text_f2b <- data.frame(r = c(-0.5, 0.5),lab = c("Negative", "Positive"),
+                       genus = factor('Arenaria',levels = c("Arenaria", "Calidris","Charadrius","Haematopus","Limnodromus","Limosa","Numenius","Pluvialis","Tringa","Vanellus")))
+f2b = 
+   ggplot(fmr[n_by_nest>10 & slope_nest_certain%in%'yes'], aes(x=r))+#, fill = r_neg)) + 
+      geom_rect(xmin = -2, xmax = 0, ymin = -Inf, ymax = Inf,fill = 'grey80',inherit.aes = FALSE)+
+      geom_histogram() + geom_vline(xintercept = 0, lty =3, col = 'black')+
+      facet_wrap(~genus, nrow = 5) + 
+      geom_text(data = ann_text_f2b,y = 14, label = c("Negative", "Positive"), size = 0.7/scale_size, col = 'grey30')+
+      scale_x_continuous("Pearson's correlation coefficient for ♂ & ♀\nincubation bouts", expand = c(0, 0)) +
+      scale_y_continuous("Nests [count]", expand = c(0, 0)) +
+      #scale_fill_manual(values = c(male, female), name = 'Negative correltation')+
+      #labs(subtitle = "Based on individual bouts")  +
+      theme(text = element_text(family = "Arial Unicode MS")) +
+      theme_MB
+ ggsave('Output/Fig_2b.png', f2b, height = 6, width = 2.5)
+
+f2c = 
+
+
+blank = ggplot() + theme_void() 
+f2b_b = ggarrange(
+    blank, f1b,blank,
+    nrow=3, heights=c(0.4,6.7,2.9), align = 'v'
+    )
+f1bc = ggarrange(
+    f1b_b,blank, f1c, blank,
+    ncol=4, widths=c(6.6,1.4,11, 1), align = 'h'
+    )
+f1abc = ggarrange(
+    f1a,f1bc,
+    nrow=2, heights=c(9.5,10), align = 'v'
+    )
 
 #' <br> 
 #' 
