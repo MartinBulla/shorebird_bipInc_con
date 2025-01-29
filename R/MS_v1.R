@@ -34,8 +34,6 @@ knitr::opts_chunk$set(message = FALSE, warning = FALSE, cache = TRUE)
     font_size = 2.5 # in the TREE
     ladderize_ = TRUE # ladderize TREE?
 
-   
-
   # packages and functions
     require(here)
     source(here::here('R/tools.R'))  # TODO:in the final version bring it here within the text
@@ -48,7 +46,6 @@ knitr::opts_chunk$set(message = FALSE, warning = FALSE, cache = TRUE)
       #plot(ladderize(tree, right = TRUE))
     tree$tip.label = gsub("_", " ", tree$tip.label)
 
-    
   # load and prepare bout data
     load(here::here("Data/Bulla_et_al_2016-comparative_all.RData"))  
     d$lat_a=abs(d$lat)
@@ -65,7 +62,6 @@ knitr::opts_chunk$set(message = FALSE, warning = FALSE, cache = TRUE)
 
     d = data.table(d)
     #d[, length(unique(nest)), by = list(scinam, breeding_site)] 
-
 
     # adjust variables
       d[, lat_pop := factor(paste(round(mean(lat),2),sp)), pop]
@@ -126,7 +122,8 @@ knitr::opts_chunk$set(message = FALSE, warning = FALSE, cache = TRUE)
       mean_bout=mean(bout_length, na.rm=TRUE), med_bout=median(bout_length, na.rm=TRUE),
       n= length(bout_length),
       lat=median(lat, na.rm=TRUE),lon=median(lon),
-      n_days=as.numeric(difftime(max(datetime_off),min(datetime_on),days))),
+      n_days=as.numeric(difftime(max(datetime_off),min(datetime_on),days)),
+      med_bout_start_j = median(bout_start_j, na.rm=TRUE)),
       by = list(suborder,genus,animal,sp,scinam,species,breeding_site,pop, lat_pop, pop_lat, year,nest, nn,pk_nest, pop_wing_f,pop_wing_m,app, tidal, tidal_pop,col_)
       ]
       dd_n[, n_fm:=ifelse(n_f>n_m, n_f, n_m)]
@@ -343,7 +340,6 @@ if (ladderize_ == FALSE) {
 } else {
    treei <- drop.tip(tree, setdiff(tree$tip.label, ds$scinam)) %>% ladderize(right =TRUE)
 }
-
 
 # reconstrunct ancestral state using phytools
 colelab <- ds$r
@@ -826,7 +822,6 @@ if (ladderize_ == FALSE) {
    treei2 <- drop.tip(tree, setdiff(tree$tip.label, ds2$scinam)) %>% ladderize(right =TRUE)
 }
 
-
 # reconstrunct ancestral state using phytools
 colelab2 <- ds2$r
 names(colelab2) <- ds2$scinam
@@ -867,7 +862,6 @@ images2 = data.table(image = list.files(
 
 images2$width = image_info(image_read(images2$image))$width 
 images2$height = image_info(image_read(images2$image))$height 
-
 
 # add node indentifiers for vertical genus bars 
 treeid2 <- data.table(as_tibble(tidytree::as.treedata(treei2)))
@@ -930,7 +924,6 @@ for (j in images2$genus) {
 # use this to add horizontal lines
 #p_g = p_g + geom_tiplab(aes(subset = (node %in% c(1)), label = ""), offset = 27, color = "lightgrey", align = TRUE, linetype = 1, vjust = 1, linesize = font_size) # treeid[treeid$label == 'xenicus_gilviventris','label']
 
-
 # add scale 
 qn2 <- scales::rescale(quantile(ds2$r), probs = seq(0, 1, length.out = length(cols_f1)))
 
@@ -989,9 +982,10 @@ on_top = TRUE, align_to = "full")
 
 ggsave(here::here("Output/Fig_X.png"), fx, width = 11, height = 10, units ='cm')
 
-#' ### Text stats and Table S1 & S2
+#' ### Text stats and Table S1 & S2 #TODO:continute here
 # descritpitve within species r
-v = fmr[n_by_nest>10 & slope_nest_certain%in%'yes']
+v = fmr[n_by_nest>10 & slope_nest_certain%in%'yes'] 
+#TODO:ask Martin whether it makes sense to limit the data to certain cases only?
 nrow(v)
 summary(v$r)
 
@@ -1000,7 +994,7 @@ mi = lmer(r~1+(1|genus) + (1|species) + (1|lat_pop), data = v)
 #apply(sim(mi, n.sim = n_sim)@fixef, 2, quantile, prob=c(0.025, 0.5, 0.975))
 table_s1 =m_out(mi, "Table S1", dep = 'r', save_sim = FALSE)
 
-# descrittion within species with and without incubation period
+# description within species with and without incubation period
 m0 = lmer(scale(bout_f)~scale(bout_m)+(1|genus) + (bout_m|species) + (1|lat_pop), data = u,
 control = lmerControl(optimizer = "Nelder_Mead")
 ) # include randome slope or not?
@@ -1021,5 +1015,82 @@ MuMIn::model.sel(m0,mb)
 # export
 rbind(table_s1, table_s2a, table_s2b) %>% kableExtra::kbl() %>%
   kableExtra::kable_paper("hover", full_width = F)
+
+# TEST whether within end_nest_stat~within nest r
+n[, pk_nest:=paste(sp, breeding_site, year, nest, nn)]
+
+vn = merge(v,n[,.(pk_nest,end_state)], all.x = TRUE)
+
+vn[end_state%in%c('fl','h'), success :=1]
+vn[end_state%in%c('p','d'), success :=0]
+vn01 = vn[!is.na(success)]
+
+m = glmer(success~r +(1|genus) + (1|species) + (1|lat_pop), family = binomial, data = vn01)
+m = glmer(success~scale(r)  + (scale(r)|lat_pop), family = binomial, data = vn01, control = glmerControl(optimizer = "nloptwrap", optCtrl = list(xtol_rel = 1e-6)))
+summary(m)
+plot(allEffects(m))
+# !If anything success decreases with increasing r
+
+#TODO:test whether assortative mating can be the median percentage of incubation period the bouts are comming from
+xt = dd_n10[!duplicated(pk_nest)]
+xt = xt[n_by_sp>10]
+
+ggplot(data = xt) + 
+geom_point(aes(x = n_days, y = med_f), fill = 'red', alpha = 0.5, col = "white", pch = 21) +
+geom_point(aes(x = n_days, y = med_m), fill = 'blue', alpha = 0.5, col = "white", pch = 21) +
+facet_wrap(~scinam, ncol = 6) + 
+labs(x = "# days recorded", y = "Bout length [h]")
+ggsave('Output/rev_bout-days.png', width = 20, height = 12, units = "cm")
+
+ggplot(data = xt) + 
+geom_point(aes(x = med_bout_start_j, y = med_f), fill = 'red', alpha = 0.5, col = "white", pch = 21) +
+#stat_smooth(method = "lm", se = FALSE, aes(x = med_bout_start_j, y = med_f), col = 'red')+
+geom_point(aes(x = med_bout_start_j, y = med_m), fill = 'blue', alpha = 0.5, col = "white", pch = 21) +
+#stat_smooth(method = "lm", se = FALSE, aes(x = med_bout_start_j, y = med_m), col = 'blue')+
+facet_wrap(~scinam, ncol = 6) + 
+labs(x = "Median incubation period of the recorded bouts", y = "Bout length [h]")
+ggsave('Output/rev_bout-inc_per.png', width = 20, height = 12, units = "cm")
+
+ggplot(data = xt) + 
+geom_point(aes(x = med_bout_start_j, y = med_f), fill = 'red', alpha = 0.5, col = "white", pch = 21) +
+stat_smooth(method = "lm", se = FALSE, aes(x = med_bout_start_j, y = med_f), col = 'red')+
+geom_point(aes(x = med_bout_start_j, y = med_m), fill = 'blue', alpha = 0.5, col = "white", pch = 21) +
+stat_smooth(method = "lm", se = FALSE, aes(x = med_bout_start_j, y = med_m), col = 'blue')+
+facet_wrap(~scinam, ncol = 6) + 
+labs(x = "Median incubation period of the recorded bouts", y = "Bout length [h]")
+ggsave('Output/rev_bout-inc_per_fit.png', width = 20, height = 12, units = "cm")
+
+require(foreach)
+p = foreach(i = unique(xt$scinam), .combine = rbind) %do% {
+  # i = 'Calidris pusilla'
+  xti = xt[scinam==i]  
+  mi = lm(med_f~med_m, xti)
+  t_mi =m_out(mi, paste(i, "simple"), dep = 'med_f', save_sim = FALSE, type = "lm")
+  t_mi[,scinam := i]
+  t_mi[, model :='simple']
+  t_mi[, N :=N[1]]
+  
+  mji = lm(med_f~med_bout_start_j + med_m, xti)
+  t_mji =m_out(mji, paste(i, "inc_per"), dep = 'med_f', save_sim = FALSE, type = "lm")
+  t_mji[,scinam := i]
+  t_mji[, model :='inc_per']
+  t_mji[, N :=N[1]]
+  
+  t_mji[, estimate_s:=c(t_mi$estimate_r[1],NA,t_mi$estimate_r[2])]
+  t_mji[, lwr_s:=c(t_mi$lwr_r[1],NA,t_mi$lwr_r[2])]
+  t_mji[, upr_s:=c(t_mi$upr_r[1],NA,t_mi$upr_r[2])]
+
+  return(t_mji)
+}
+ggplot(p[effect%in%'med_m'], aes(x = estimate_s, y = estimate_r)) +  
+  geom_point() +
+  #geom_errorbar(aes(ymin = lwr_r, ymax = upr_r), width = 0.1) +  # Error bars for y-axis
+  #geom_errorbarh(aes(xmin = lwr_s, xmax = upr_s), height = 0.1)  # Error bars for x-axis
+  geom_abline(intercept = 0, slope = 1, lty = 3, col = "grey") +
+  labs(x = "Estimate", y = "Estiamte controlled for incubation period")
+ggsave('Output/rev_bout-inc_per_fit.png', width = 8, height = 8, units = "cm")
+
+# TODO:restrict anal just to specific incubation period
+# TODO:2)	Can you test for the convergence by looking at the correlation in bout length early and late in incubation to show the synchronisation and contrast that for successful and failed? If you show that pairs are aligning their bouts as nest age and nests that do it more quickly are more likely to hatch – implication of ass mating. If not, then it is not convergence of behaviour – whether it is active/passive choice, there is pre-programmed or environmental influences
 
 # end
