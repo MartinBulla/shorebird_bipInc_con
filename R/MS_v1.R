@@ -1306,23 +1306,126 @@ ggplot(fm_15, aes(x = slope_nest, y = slope_nest_ip)) +
 
 #' ### Mate choice vs convergence
 #' Mate choice can be involved despite convergence, if within-nest correlatins are present at the beginning of incubation period. They are, see the model output of one of many models:
-poly_terms <- poly(u$bout_start_j, 2)
+
+#TODO:plot each new model (final one with interaction is done) using function from CHATGPT - needs to be created... Run model assumptions on the main/all models. Then finalize what is below.... Also add population level predictions.
+# prepare data
+## orthogonal polynomials
+poly_terms <- poly(u$prop_ip, 2)
 coefs <- attr(poly_terms, "coefs") 
 u[, bout_pol1 := poly_terms[, 1]]
 u[, bout_pol2 := poly_terms[, 2]]
-#u[, bout_pol1 := poly(bout_start_j,2)[,1]]
-#u[, bout_pol2 := poly(bout_start_j,2)[,2]]
 
-mbi4 = lmer(bout_f~bout_m*bout_pol1+bout_m*bout_pol2+(1|genus) + (1|species) + (bout_m+bout_pol1+bout_pol2|lat_pop), data = u, control = lmerControl(optimizer = "Nelder_Mead")) 
+## capture scaling parameters (used both in model and back-transformation)
+mean_bout_m <- mean(u$bout_m, na.rm = TRUE)
+sd_bout_m   <- sd(u$bout_m, na.rm = TRUE)
+mean_bout_f <- mean(u$bout_f, na.rm = TRUE)
+sd_bout_f   <- sd(u$bout_f, na.rm = TRUE)
+bout_m_range <- range(u$bout_m)
+u <- u %>%
+  mutate(
+    bout_f_z = as.numeric(scale(bout_f)),
+    bout_m_z = as.numeric(scale(bout_m))
+  )
+
+#u[, bout_pol1 := poly(prop_ip,2)[,1]]
+#u[, bout_pol2 := poly(prop_ip,2)[,2]]
+
+mbi4 = lmer(bout_f~bout_m*bout_pol1+bout_m*bout_pol2+(1|genus) + (bout_m+bout_pol1+bout_pol2|species) + (1|lat_pop), data = u, 
+control = lmerControl(optimizer = "nloptwrap", optCtrl = list(maxeval = 2e5)))
+mbi4z = lmer(scale(bout_f)~scale(bout_m)*bout_pol1+scale(bout_m)*bout_pol2+(1|genus) + (scale(bout_m)+bout_pol1+bout_pol2|species) + (1|lat_pop), data = u, 
+control = lmerControl(optimizer = "nloptwrap", optCtrl = list(maxeval = 2e5)))
+mbi4zp = lmer(scale(bout_f)~scale(bout_m)*bout_pol1+scale(bout_m)*bout_pol2+(1|genus) + (1|species) + (scale(bout_m)+bout_pol1+bout_pol2|lat_pop), data = u, 
+control = lmerControl(optimizer = "nloptwrap", optCtrl = list(maxeval = 2e5)))
+
+mbi4zp_uncor = lmer(scale(bout_f)~scale(bout_m)*bout_pol1+scale(bout_m)*bout_pol2+(1|genus) + (1|species) + (scale(bout_m)+bout_pol1+bout_pol2||lat_pop), data = u, 
+control = lmerControl(optimizer = "nloptwrap", optCtrl = list(maxeval = 2e5)))
+
+
+mbi5z = lmer(scale(bout_f)~scale(bout_m)*bout_pol1+scale(bout_m)*bout_pol2+(1|genus) + (scale(bout_m)*bout_pol1+scale(bout_m)*bout_pol2|species) + (1|lat_pop), data = u, 
+control = lmerControl(optimizer = "nloptwrap", optCtrl = list(maxeval = 2e5)))
+
+mbi5zp = lmer(scale(bout_f)~scale(bout_m)*bout_pol1+scale(bout_m)*bout_pol2+(1|genus) + (1|species) + (scale(bout_m)*bout_pol1+scale(bout_m)*bout_pol2|lat_pop), data = u, 
+control = lmerControl(optimizer = "nloptwrap", optCtrl = list(maxeval = 2e5)))
+
+# visualise pop-level random slopes
+
+sim_mod <- sim(mbi5zp, n.sims = 5000) # simulate from posterior
+pops <- rownames(ranef(mbi5zp)$lat_pop) # get population names
+
+## function to extract posterior summaries for each slope
+extract_slopes <- function(slope_name, fixed_name) {
+  slope_matrix <- sapply(pops, function(pop) {
+    sim_mod@fixef[, fixed_name] + sim_mod@ranef$lat_pop[, pop, slope_name]
+  })
+  
+  # build summary dataframe
+  slope_df <- as.data.frame(t(apply(slope_matrix, 2, function(x) {
+    c(mean = mean(x), lower = quantile(x, 0.025), upper = quantile(x, 0.975))
+  })))
+  
+  slope_df$lat_pop <- pops
+  slope_df$slope <- slope_name
+  return(slope_df)
+}
+
+## apply for both interactions
+slope1 <- extract_slopes("scale(bout_m):bout_pol1", "scale(bout_m):bout_pol1")
+slope2 <- extract_slopes("scale(bout_m):bout_pol2", "scale(bout_m):bout_pol2")
+
+## combine
+slopes_all <- bind_rows(slope1, slope2)
+
+## add pop metadata
+u[, lat_ := abs(as.numeric(substring(lat_pop, 1, nchar(as.character(lat_pop))-5)))]
+pop_meta <- u %>%
+  select(lat_pop, species, latitude = lat_) %>%  # adjust LAT name if different
+  distinct()
+
+slopes_all <- left_join(slopes_all, pop_meta, by = "lat_pop")
+
+## reorder by slope within facet
+slopes_all <- slopes_all %>%
+  group_by(slope) %>%
+  mutate(lat_pop_ordered = fct_reorder(lat_pop, mean)) %>%
+  ungroup()
+  
+
+ggplot(slopes_all, aes(x = lat_pop_ordered, y = mean, color = species)) +
+  geom_pointrange(aes(ymin = `lower.2.5%`, ymax = `upper.97.5%`), size = 0.4) +
+  geom_hline(yintercept = 0, linetype = "dashed", color = "grey30") +
+  facet_wrap(~slope) +
+  coord_flip() +
+  labs(x = "Population", y = "Estimated interaction slope",
+       subtitle = "Population-level interaction slopes with 95% credible intervals") +
+  theme_minimal() +
+  theme(legend.position = "bottom")
+
+ggplot(slopes_all, aes(x = lat_pop_ordered, y = mean, color = latitude)) +
+  geom_pointrange(aes(ymin = `lower.2.5%`, ymax = `upper.97.5%`), size = 0.4) +
+  geom_hline(yintercept = 0, linetype = "dashed", color = "grey30") +
+  facet_wrap(~slope) +
+  coord_flip() +
+  scale_color_viridis_c(option = "D", end = 0.95) +  # Optional: better visual range
+  labs(
+    x = "Population",
+    y = "Estimated interaction slope",
+    color = "Latitude",
+    subtitle = "Population-level interaction slopes with 95% credible intervals"
+  ) +
+  theme_minimal() +
+  theme(legend.position = "bottom")
+
+
+#TODO:ADD MODEL
 
 bsim = sim(mbi4,n.sim = nsim)
 v <- apply(bsim@fixef, 2, quantile, prob = c(0.5))#plogis(v)
-newD = foreach(i = c(3, 10, 20), .combine = rbind) %do%{
- data.table(bout_m = seq(min(u$bout_m), max(u$bout_m), length.out =100), bout_start_j = i)
+newD = foreach(i = c(0.05, 0.5, 0.9), .combine = rbind) %do%{
+ data.table(bout_m = seq(min(u$bout_m), max(u$bout_m), length.out =100), prop_ip = i)
 }
  
 # apply original orthogonal poly transformation using saved coefs
-new_poly <- poly(newD$bout_start_j, degree = 2, coefs = coefs)
+new_poly <- poly(newD$prop_ip, degree = 2, coefs = coefs)
 
 newD[, bout_pol1 := new_poly[, 1]]
 newD[, bout_pol2 := new_poly[, 2]]
@@ -1338,14 +1441,14 @@ ggplot(data = newD) +
   geom_ribbon(aes(x = bout_m, ymin = lwr, ymax = upr), 
               fill = "grey90", alpha = 0.9) +
   geom_line(aes(x = bout_m, y = pred)) +
-  facet_wrap(~bout_start_j, ncol = 3) + theme_MB
+  facet_wrap(~prop_ip, ncol = 3) + theme_MB
 
 custom_colors <- pal_locuszoom()(7)[4:2]
 
 gm1 = 
 ggplot(data = newD) + 
-  geom_ribbon(aes(x = bout_m, ymin = lwr, ymax = upr, fill = factor(bout_start_j)), alpha = 0.3) +
-  geom_line(aes(x = bout_m, y = pred, col = factor(bout_start_j))) +
+  geom_ribbon(aes(x = bout_m, ymin = lwr, ymax = upr, fill = factor(prop_ip)), alpha = 0.3) +
+  geom_line(aes(x = bout_m, y = pred, col = factor(prop_ip))) +
   scale_color_manual(name = 'Incubation period', values = custom_colors,  labels = c('early', 'mid', 'late'), guide = guide_legend(reverse = TRUE)) +
   scale_fill_manual(name = 'Incubation period', values = custom_colors, labels = c('early', 'mid', 'late'),  guide = guide_legend(reverse = TRUE)) +
   scale_x_continuous("♂ bout [hours]") +
@@ -1353,47 +1456,70 @@ ggplot(data = newD) +
   labs(subtitle = "random slope of ♂ bout + poly(incubation period")+
   theme_MB
 
-mbi5 = lmer(bout_f~bout_m*bout_pol1+bout_m*bout_pol2+(1|genus) + (1|species) + (bout_m*bout_pol1+bout_m*bout_pol2|lat_pop), data = u, control = lmerControl(optimizer = "Nelder_Mead")) 
+mbi5zp <- lmer(bout_f_z ~ bout_m_z * bout_pol1 + bout_m_z * bout_pol2 + 
+              (1|genus) + (1|species) + 
+              (bout_m_z * bout_pol1 + bout_m_z * bout_pol2 | lat_pop),
+              data = u)
 
-bsim = sim(mbi5,n.sim = nsim)
-v <- apply(bsim@fixef, 2, quantile, prob = c(0.5))#plogis(v)
-newD = foreach(i = c(3, 10, 20), .combine = rbind) %do%{
- data.table(bout_m = seq(min(u$bout_m), max(u$bout_m), length.out =100), bout_start_j = i)
+bsim = sim(mbi5zp,n.sim = nsim) # simulate
+v <- apply(bsim@fixef, 2, quantile, prob = c(0.5))# extract fixed effects
+
+# new data frame for predictions
+newD = foreach(i = c(0.05, 0.5, 0.9), .combine = rbind) %do%{
+ data.table(bout_m = seq(min(u$bout_m), max(u$bout_m), length.out =100), prop_ip = i)
 }
 
-# apply original orthogonal poly transformation using saved coefs
-new_poly <- poly(newD$bout_start_j, degree = 2, coefs = coefs)
+# apply original orthogonal poly transformation (using saved coefs)
+new_poly <- poly(newD$prop_ip, degree = 2, coefs = coefs)
 newD[, bout_pol1 := new_poly[, 1]]
 newD[, bout_pol2 := new_poly[, 2]]
 
-X = model.matrix(~bout_m*bout_pol1+bout_m*bout_pol2, newD)
+# scale bout_m to match model inputs
+newD[, bout_m_z := (bout_m - mean_bout_m) / sd_bout_m]
+
+# model matrix for scaled predictors
+X = model.matrix(~bout_m_z*bout_pol1+bout_m_z*bout_pol2, newD)
+
+# generate predictions using simulated fixed effects
 predmatrix = matrix(nrow = nrow(newD), ncol = nsim)
 for(j in 1:nsim) predmatrix[,j] <-(X %*% bsim@fixef[j,])
-newD$pred <- (X %*% v) # fitted values
-newD$lwr <- apply(predmatrix, 1, quantile, prob = 0.025)
-newD$upr <- apply(predmatrix, 1, quantile, prob = 0.975)
+
+# compute prediction summaries (on scaled outcome)
+newD$pred_z <- (X %*% v) # fitted values
+newD$lwr_z <- apply(predmatrix, 1, quantile, prob = 0.025)
+newD$upr_z <- apply(predmatrix, 1, quantile, prob = 0.975)
+
+# back-transform predictions to original scale
+newD[, pred := pred_z * sd_bout_f + mean_bout_f]
+newD[, lwr := lwr_z * sd_bout_f + mean_bout_f]
+newD[, upr := upr_z * sd_bout_f + mean_bout_f]
+
+pred_fixed = predict_fixed_effects_scaled_model(model = mbi5zp)
 
 gm2 = 
-ggplot(data = newD) + 
-  geom_ribbon(aes(x = bout_m, ymin = lwr, ymax = upr, fill = factor(bout_start_j)), alpha = 0.3) +
-  geom_line(aes(x = bout_m, y = pred, col = factor(bout_start_j))) +
+ggplot(data = pred_fixed) + 
+  geom_ribbon(aes(x = bout_m, ymin = lwr, ymax = upr, fill = factor(prop_ip)), alpha = 0.3) +
+  geom_line(aes(x = bout_m, y = pred, col = factor(prop_ip))) +
   scale_color_manual(name = 'Incubation period', values = custom_colors,  labels = c('early', 'mid', 'late'), guide = guide_legend(reverse = TRUE)) +
   scale_fill_manual(name = 'Incubation period', values = custom_colors, labels = c('early', 'mid', 'late'),  guide = guide_legend(reverse = TRUE)) +
   scale_x_continuous("♂ bout [hours]") +
   scale_y_continuous("♀ bout [hours]") +
+  facet_wrap(~prop_ip) + 
   labs(subtitle = "random slope of ♂ bout:poly(incubation period")+
   theme_MB
 
+
+ggplot(u, aes(x = bout_m, y = bout_f, col = prop_ip)) + geom_point()
 mbi = lmer(bout_f~bout_m*bout_pol1+bout_m*bout_pol2+(1|genus) + (1|species) + (bout_m|lat_pop), data = u, control = lmerControl(optimizer = "Nelder_Mead")) 
 
 bsim = sim(mbi,n.sim = nsim)
 v <- apply(bsim@fixef, 2, quantile, prob = c(0.5))#plogis(v)
-newD = foreach(i = c(3, 10, 20), .combine = rbind) %do%{
- data.table(bout_m = seq(min(u$bout_m), max(u$bout_m), length.out =100), bout_start_j = i)
+newD = foreach(i = c(0.05, 0.5, 0.9), .combine = rbind) %do%{
+ data.table(bout_m = seq(min(u$bout_m), max(u$bout_m), length.out =100), prop_ip = i)
 }
 
 # apply original orthogonal poly transformation using saved coefs
-new_poly <- poly(newD$bout_start_j, degree = 2, coefs = coefs)
+new_poly <- poly(newD$prop_ip, degree = 2, coefs = coefs)
 newD[, bout_pol1 := new_poly[, 1]]
 newD[, bout_pol2 := new_poly[, 2]]
 
@@ -1406,8 +1532,8 @@ newD$upr <- apply(predmatrix, 1, quantile, prob = 0.975)
 
 gm3 = 
 ggplot(data = newD) + 
-  geom_ribbon(aes(x = bout_m, ymin = lwr, ymax = upr, fill = factor(bout_start_j)), alpha = 0.3) +
-  geom_line(aes(x = bout_m, y = pred, col = factor(bout_start_j))) +
+  geom_ribbon(aes(x = bout_m, ymin = lwr, ymax = upr, fill = factor(prop_ip)), alpha = 0.3) +
+  geom_line(aes(x = bout_m, y = pred, col = factor(prop_ip))) +
   scale_color_manual(name = 'Incubation period', values = custom_colors,  labels = c('early', 'mid', 'late'), guide = guide_legend(reverse = TRUE)) +
   scale_fill_manual(name = 'Incubation period', values = custom_colors, labels = c('early', 'mid', 'late'),  guide = guide_legend(reverse = TRUE)) +
   scale_x_continuous("♂ bout [hours]") +
@@ -1420,12 +1546,12 @@ mbi2 = lmer(bout_f~bout_m*bout_pol1+bout_m*bout_pol2+(1|genus) + (1|species) + (
 
 bsim = sim(mbi2,n.sim = nsim)
 v <- apply(bsim@fixef, 2, quantile, prob = c(0.5))#plogis(v)
-newD = foreach(i = c(3, 10, 20), .combine = rbind) %do%{
- data.table(bout_m = seq(min(u$bout_m), max(u$bout_m), length.out =100), bout_start_j = i)
+newD = foreach(i = c(0.05, 0.5, 0.9), .combine = rbind) %do%{
+ data.table(bout_m = seq(min(u$bout_m), max(u$bout_m), length.out =100), prop_ip = i)
 }
 
 # apply original orthogonal poly transformation using saved coefs
-new_poly <- poly(newD$bout_start_j, degree = 2, coefs = coefs)
+new_poly <- poly(newD$prop_ip, degree = 2, coefs = coefs)
 newD[, bout_pol1 := new_poly[, 1]]
 newD[, bout_pol2 := new_poly[, 2]]
 
@@ -1438,8 +1564,8 @@ newD$upr <- apply(predmatrix, 1, quantile, prob = 0.975)
 
 gm4 = 
 ggplot(data = newD) + 
-  geom_ribbon(aes(x = bout_m, ymin = lwr, ymax = upr, fill = factor(bout_start_j)), alpha = 0.3) +
-  geom_line(aes(x = bout_m, y = pred, col = factor(bout_start_j))) +
+  geom_ribbon(aes(x = bout_m, ymin = lwr, ymax = upr, fill = factor(prop_ip)), alpha = 0.3) +
+  geom_line(aes(x = bout_m, y = pred, col = factor(prop_ip))) +
   scale_color_manual(name = 'Incubation period', values = custom_colors,  labels = c('early', 'mid', 'late'), guide = guide_legend(reverse = TRUE)) +
   scale_fill_manual(name = 'Incubation period', values = custom_colors, labels = c('early', 'mid', 'late'),  guide = guide_legend(reverse = TRUE)) +
   scale_x_continuous("♂ bout [hours]") +
@@ -1456,7 +1582,7 @@ fig_S_w2 = (gm3 + theme(legend.position = "none") +
      plot_layout(ncol = 2) & 
      theme(legend.position = "right")  
 
-ggsave(file = here::here("Output/Fig_S_w2_correct-poly.png"), fig_S_w2, width = 16, height = 15, units = "cm")
+ggsave(file = here::here("Output/Fig_S_w2_correct-poly-perc-ip.png"), fig_S_w2, width = 16, height = 15, units = "cm")
 fig_S_w2
 # version 2 - ranom intercept - species
 custom_colors <- pal_locuszoom()(7)[4:2]
