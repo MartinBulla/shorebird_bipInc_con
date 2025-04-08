@@ -60,7 +60,7 @@ getnode <- function(...) {
 }
 
 # load/install packages
-  packages = c('ape','arm','RColorBrewer','data.table', 'effects', 'forcats', 'ggExtra', 'ggnewscale', 'ggimage', 'ggplot2', 'ggtext','ggthemes', 'ggtree','glue',  'grid','gridExtra', 'here', 'Hmisc','htmlTable', 'lattice', 'lubridate', 'magick', 'magrittr', 'maptools', 'multcomp', 'pals','patchwork', 'performance', 'phangorn','phytools','plyr','raster','reshape2', 'sandwich','scales','stringr','readxl','zoo', 'gt', 'tidyverse', 'ggpubr')
+  packages = c('ape','arm','RColorBrewer','data.table', 'effects', 'forcats', 'foreach','ggExtra', 'ggnewscale', 'ggimage', 'ggplot2','ggsci', 'ggtext','ggthemes', 'ggtree','glue',  'grid','gridExtra', 'here', 'Hmisc','htmlTable', 'lattice', 'lubridate', 'magick', 'magrittr', 'maptools', 'multcomp', 'pals','patchwork', 'performance', 'phangorn','phytools','plyr','raster','reshape2', 'sandwich','scales','stringr','readxl','zoo', 'gt', 'tidyverse', 'ggpubr')
   sapply(packages, function(x) suppressPackageStartupMessages(using(x)) )
 
 # Customized ggplot themes
@@ -174,7 +174,60 @@ getnode <- function(...) {
       
       if((ci[1, 2] <= 0 && ci[2, 2] >= 0)==TRUE){'no'}else{'yes'}
     }    
+# Function for credible intervals from group-wise robust regression without weights 2
+    simulate_rlm_no_weights_2 <- function(dt) {
+      n_sim = 5000
+      #dt=fm[pk_nest=='AMGP barr 2010 AMGP230 1']  
+      # Extract coefficients
+      rlm_model <- tryCatch(
+        rlm(wing_f ~ wing_m, data = dt, maxit = 200),
+        error = function(e) return(NULL)
+      )
+      coef_estimates <- coef(rlm_model)
       
+      # Compute covariance matrix
+      residuals <- resid(rlm_model)
+      design_matrix <- model.matrix(rlm_model)
+      sigma_squared <- sum(residuals^2) / nrow(design_matrix)
+      cov_matrix <- sigma_squared * solve(t(design_matrix) %*% design_matrix)
+  
+      # Simulate from multivariate normal
+      set.seed(25)
+      sim_coefficients <- MASS::mvrnorm(n_sim, mu = coef_estimates, Sigma = cov_matrix)
+      
+      # Compute quantiles
+      ci <- apply(sim_coefficients, 2, quantile, probs = c(0.025, 0.975))
+        # Check if credible interval for slope crosses zero
+      
+      if((ci[1, 2] <= 0 && ci[2, 2] >= 0)==TRUE){'no'}else{'yes'}
+    }   
+# Function for credible intervals from group-wise robust regression without weights 3
+    simulate_rlm_no_weights_2 <- function(dt) {
+      n_sim = 5000
+      #dt=fm[pk_nest=='AMGP barr 2010 AMGP230 1']  
+      # Extract coefficients
+      rlm_model <- tryCatch(
+        rlm(scale(bout_f) ~ scale(bout_m) + poly(bout_start_j,2), data = dt, maxit = 200),
+        error = function(e) return(NULL)
+      )
+      coef_estimates <- coef(rlm_model)
+      
+      # Compute covariance matrix
+      residuals <- resid(rlm_model)
+      design_matrix <- model.matrix(rlm_model)
+      sigma_squared <- sum(residuals^2) / nrow(design_matrix)
+      cov_matrix <- sigma_squared * solve(t(design_matrix) %*% design_matrix)
+  
+      # Simulate from multivariate normal
+      set.seed(25)
+      sim_coefficients <- MASS::mvrnorm(n_sim, mu = coef_estimates, Sigma = cov_matrix)
+      
+      # Compute quantiles
+      ci <- apply(sim_coefficients, 2, quantile, probs = c(0.025, 0.975))
+        # Check if credible interval for slope crosses zero
+      
+      if((ci[1, 2] <= 0 && ci[2, 2] >= 0)==TRUE){'no'}else{'yes'}
+    }      
 # model assumption functions
   # mixed models
   m_ass = function(file_name = 'define', mo = m0, dat = d, fixed = NULL, categ = NULL, trans = "none", spatial = TRUE, temporal = TRUE, PNG = TRUE, outdir = 'Output/Model_ass/'){
