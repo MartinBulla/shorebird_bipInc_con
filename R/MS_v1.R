@@ -16,7 +16,6 @@
 knitr::opts_chunk$set(message = FALSE, warning = FALSE, cache = TRUE)
 
 # TODO:check whether densityscale in trees are correct in fs2 surely not and fig 1c likely also not
-# TODO: check what happens with within nest correlations coefficients if day of incubation is controlled for
 
 #' ##### Code to load tools & data
   # constants
@@ -24,6 +23,16 @@ knitr::opts_chunk$set(message = FALSE, warning = FALSE, cache = TRUE)
     fam = "Arial Unicode MS"# text family
     female='#FCB42C' # 'deepskyblue'
     male='#535F7C' # 'red'
+    green_ = '#4A9F4A'
+    red_ = "#D43F3AFF" # ggsci::pal_locuszoom()(5)    
+    blue_ =  "#46B8DAFF"
+    lz_colors <- c(
+  "#3B4CC0",  # blue
+  "#78AADD",  # light blue
+  "#79C36A",  # green
+  "#E1A439",  # orange
+  "#D92120"   # red
+)
     ax_lines = "grey60"
     size_l = 0.75
     tx_legend_tit = 6
@@ -51,7 +60,7 @@ knitr::opts_chunk$set(message = FALSE, warning = FALSE, cache = TRUE)
     d$lat_a=abs(d$lat)
     d=d[d$sex%in%c('f','m'),]
    
-    # add inc_start
+    # add inc_start and end state
     n=fread(here::here('Data/Bulla_et_al_2016-Supplementary Data 4 - Nests metadata.csv'), stringsAsFactors=FALSE)
     
     d$inc_start=as.POSIXct(n$incubation_start_datetime[match(tolower(paste(d$breeding_site,d$year,d$nest,d$nn)),tolower(paste(n$breeding_site,n$year,n$nest, n$nn)))]) 
@@ -62,6 +71,23 @@ knitr::opts_chunk$set(message = FALSE, warning = FALSE, cache = TRUE)
 
     d = data.table(d)
     #d[, length(unique(nest)), by = list(scinam, breeding_site)] 
+    # incubation start as % of species incubation period
+    ip =  fread(here::here('Data/inc_period.csv'), stringsAsFactors=FALSE)
+    d = merge(d,ip[,.(scinam, inc_per)], all.x = TRUE)
+    d[pk_nest%in%d[bout_start_j%in%0, pk_nest], bout_start_j := bout_start_j+1] # adjust wrongly assigned bout_start_j 
+    d$prop_ip=d$bout_start_j/d$inc_per
+
+    # add body mass
+    b=fread(here::here('Data/Supplementary Data 5 - Birds metadata.csv'), stringsAsFactors=FALSE)
+    b_filtered <- b[!(is.na(wing) & is.na(mass))]  # Remove rows where both wing & mass are NA
+    #b_filtered[, .N, by = .(nest, bird_ID)][N > 1] # check multiple catches of a bird 
+    b_both =  b[!is.na(wing) & !is.na(mass)] # non-na wing and mass
+    b_both_mean <- b_both[, .( # get mean values per bird, nest and year
+        wing = mean(wing, na.rm = TRUE), 
+        mass = mean(mass, na.rm = TRUE)
+      ), by = .(year, nest, bird_ID)]
+    
+    d <- merge(d, b_both_mean[, .(year, nest, bird_ID, wing, mass)], by = c("year","nest", "bird_ID"), all.x = TRUE) # merge with d while keeping all d records
 
     # adjust variables
       d[, lat_pop := factor(paste(round(mean(lat),2),sp)), pop]
@@ -123,7 +149,12 @@ knitr::opts_chunk$set(message = FALSE, warning = FALSE, cache = TRUE)
       n= length(bout_length),
       lat=median(lat, na.rm=TRUE),lon=median(lon),
       n_days=as.numeric(difftime(max(datetime_off),min(datetime_on),days)),
-      med_bout_start_j = median(bout_start_j, na.rm=TRUE)),
+      med_bout_start_j = median(bout_start_j, na.rm=TRUE),
+      wing_f=mean(wing[sex=='f'], na.rm=TRUE),
+      wing_m=mean(wing[sex=='m'], na.rm=TRUE),
+      mass_f=mean(mass[sex=='f'], na.rm=TRUE),
+      mass_m=mean(mass[sex=='m'], na.rm=TRUE)
+      ),
       by = list(suborder,genus,animal,sp,scinam,species,breeding_site,pop, lat_pop, pop_lat, year,nest, nn,pk_nest, pop_wing_f,pop_wing_m,app, tidal, tidal_pop,col_)
       ]
       dd_n[, n_fm:=ifelse(n_f>n_m, n_f, n_m)]
@@ -140,6 +171,10 @@ knitr::opts_chunk$set(message = FALSE, warning = FALSE, cache = TRUE)
       dd_n10[n_by_pop>5,  r := cor(med_f, med_m), by = pop]
       dd_n10[n_by_pop>5 & r<0, r_neg := 'yes']
       dd_n10[n_by_pop>5 & !r_neg%in%'yes', r_neg := 'no']
+
+      dd_n10[n_by_pop>5,  r_wing := cor(wing_f, wing_m), by = pop]
+      dd_n10[n_by_pop>5 & r_wing<0, r_wing_neg := 'yes']
+      dd_n10[n_by_pop>5 & !r_wing_neg%in%'yes', r_wing_neg := 'no']
       
       # rlm
       dd_n10[n_by_pop>5,  slope_pop := rlm(med_f ~ med_m, weights = n)  %>% coef  %>% magrittr::extract(2), by = pop] 
@@ -458,7 +493,7 @@ f1c_l <-
         colours = cols_f1, # viridis(10),
         values = qn # c(0, seq(qn01[1], qn01[2], length.out = 18), 1)
     ) +
-    geom_vline(xintercept = median(ds$r), lty =3, linewidth = 0.5, color = 'red')+
+    geom_vline(xintercept = median(ds$r), lty =3, linewidth = 0.5, color = green_)+
     #geom_line(data = den_o, aes(x = x, y = y), color = osc) +
     #geom_line(data = den_s, aes(x = x, y = y), color = sub) +
     # geom_segment(data = den_s, aes(x, y, xend = x, yend = 0)) +
@@ -528,9 +563,189 @@ f1abc
 
 #' <br> 
 #' 
+#' ### Drivers
+#' #### Is assortative mating confounded by data collection?
+#' In some species, icubation bout length tend to change over the incubation period, e.g. increasing in length. Thus, if some nests are monitored only at the begining of the incubation period and others toward the end or if nests are monitored for varying number of days, this in itself could create spurious assortment.
+#' 
+#' #####  Is the median ♂/♀ bout per nest related to number of days a nest was monitored?
+#+ ft_1, fig.width=20*inch,fig.height=12*inch
+xt = dd_n10[!duplicated(pk_nest)]
+xt = xt[n_by_sp>10]
+
+# prepare labels
+label_xt <- data.table(
+  scinam = levels(factor(xt$scinam))[1],
+  x = c(27, 29),  # adjust x as needed
+  y = c(15.5,15.5),  # adjust y based on your data range
+  label = c("♂", "♀"),
+  color = c(blue_, red_)
+)
+
+ggplot(data = xt) + 
+geom_point(aes(x = n_days, y = med_f), fill = red_, alpha = 0.8, col = "white", pch = 21) +
+geom_point(aes(x = n_days, y = med_m), fill = blue_, alpha = 0.8, col = "white", pch = 21) +
+facet_wrap(~scinam, ncol = 6) + 
+geom_text(data = label_xt, aes(x = x, y = y, label = label, color = color),
+            show.legend = FALSE, fontface = "bold", size = 4) +
+scale_color_identity() + # use actual color values from 'color' column
+labs(x = "Days recorded", y = "Bout length [h]")+
+theme_MB
+ggsave(file = here::here("Output/Fig_S_N-days_width-180mm_test.png"), width = 20, height = 10, units = "cm")
+#' **<span style="color:red">!!! It is reassuring to see that no, with exception of turnstone. !!!</span>**  
+#' 
+#' ### Is the median ♂/♀ bout per nest confounded by when within the incubation period the data were collected?
+#+ ft_2, fig.width=20*inch,fig.height=10*inch
+label_xt2 <- data.table(
+  scinam = levels(factor(xt$scinam))[1],
+  x = c(25, 27),  # adjust x as needed
+  y = c(15.5,15.5),  # adjust y based on your data range
+  label = c("♂", "♀"),
+  color = c(blue_, red_)
+)
+ggplot(data = xt) + 
+geom_point(aes(x = med_bout_start_j, y = med_f), fill = red_, alpha = 0.9, col = "white", pch = 21) +
+#stat_smooth(method = "lm", se = FALSE, aes(x = med_bout_start_j, y = med_f), col = 'red')+
+geom_point(aes(x = med_bout_start_j, y = med_m), fill = blue_, alpha = 0.9, col = "white", pch = 21) +
+#stat_smooth(method = "lm", se = FALSE, aes(x = med_bout_start_j, y = med_m), col = 'blue')+
+facet_wrap(~scinam, ncol = 6) + 
+geom_text(data = label_xt2, aes(x = x, y = y, label = label, color = color),
+            show.legend = FALSE, fontface = "bold", size = 4) +
+scale_color_identity() + # use actual color values from 'color' column
+labs(x = "Median incubation period of the recorded bouts", y = "Bout length [h]") +
+theme_MB
+
+ggsave(file = here::here("Output/Fig_S_inc-per_width-180mm_test.png"), width = 20, height = 10, units = "cm")
+#' **<span style="color:red"> Perhaps in some species the incubation biases the bout lengths, but  does it influence assortative mating estimates?</span>**  
+#' 
+#' 
+
+#+ ft_3, fig.width=8*inch,fig.height=8*inch
+
+p = foreach(i = unique(xt$scinam), .combine = rbind) %do% {
+  # i = 'Calidris pusilla'
+  xti = xt[scinam==i]  
+  mi = lm(scale(med_f)~scale(med_m), xti)
+  t_mi =m_out(mi, paste(i, "simple"), dep = 'med_f', save_sim = FALSE, type = "lm")
+  t_mi[,scinam := i]
+  t_mi[, model :='simple']
+  t_mi[, N :=N[1]]
+  
+  mji = lm(scale(med_f)~scale(med_bout_start_j) + scale(med_m), xti)
+  t_mji =m_out(mji, paste(i, "inc_per"), dep = 'med_f', save_sim = FALSE, type = "lm")
+  t_mji[,scinam := i]
+  t_mji[, model :='inc_per']
+  t_mji[, N :=N[1]]
+  
+  t_mji[, estimate_s:=c(t_mi$estimate_r[1],NA,t_mi$estimate_r[2])]
+  t_mji[, lwr_s:=c(t_mi$lwr_r[1],NA,t_mi$lwr_r[2])]
+  t_mji[, upr_s:=c(t_mi$upr_r[1],NA,t_mi$upr_r[2])]
+
+  return(t_mji)
+}
+ggplot(p[effect%in%'scale(med_m)'], aes(x = estimate_s, y = estimate_r)) +  
+  geom_point(aes(size = as.numeric(N)), pch = 21) +
+  #geom_errorbar(aes(ymin = lwr_r, ymax = upr_r), width = 0.1) +  # Error bars for y-axis
+  #geom_errorbarh(aes(xmin = lwr_s, xmax = upr_s), height = 0.1)  # Error bars for x-axis
+  geom_abline(intercept = 0, slope = 1, lty = 3, col = "red") +
+  scale_size(name = "# of nests", limits = c(10, 124), breaks = c(10, 60, 120)) +
+  scale_x_continuous(limits = c(0,1))+
+  scale_y_continuous(limits = c(0,1))+
+  labs(x = "Assortative mating\n", y = "Assortative mating\ncontrolled for incubation period")+
+  theme_MB
+  ggsave(file = here::here("Output/Fig_S_cor-AM-AM-controled_width-80mm_test.png"), width = 8, height = 6.5, units = "cm")
+#'    
+#' **!!! It is reassuring to see that NO.!!!** The estimates from a simple model - lm(med_f~med_m) - are similar to those from a model controlled for median incubation period of the data lm(med_f~inc_per+med_m)   
+#' 
+#' I feel this is enough and we do not need to check whether assortative mating holds when only part of the incubation period is used.  
+#' 
+#'***
+#' 
+
+#' #### Not body size
+#+ f_body, fig.width=20*inch,fig.height=10*inch
+        # TEMP start
+          ws = dd_n[!(is.na(wing_f) | is.na(wing_m))]
+          ws = ws[!duplicated(pk_nest)]
+          ws[, n_by_pop := .N, pop]#; ws[n_by_pop>10, length(unique(pop))]
+          ws_pop5 = ws[n_by_pop>5]#
+          ws[, n_by_sp:= .N, scinam]
+          ws_sp5 = ws[n_by_sp>5]
+
+          ws_pop5[, r := cor(med_f, med_m), by = pop]
+          ws_pop5[, r_pop := cor(wing_f, wing_m), by = pop]
+          ws_sp5[, r := cor(med_f, med_m), by = scinam]
+          ws_sp5[,  r_sp := cor(wing_f, wing_m), by = scinam]
+
+          ws_sp5[, slope_sp_certain := simulate_rlm_no_weights_2(.SD), by = scinam] 
+      
+
+          ggplot(ws_pop5[!duplicated(pop)], aes(x = r_pop)) + geom_histogram()
+          ggplot(ws_sp5[!duplicated(scinam)], aes(x = r_sp)) + geom_histogram()
+
+          ggplot(ws_pop5[!duplicated(pop)], aes(x = r_pop , y = r)) + geom_point() + stat_smooth(method = 'lm')
+          ggplot(ws_sp5[!duplicated(scinam)], aes(x = r_sp , y = r)) + geom_point() + stat_smooth(method = 'lm')
+        # version patchwork
+           # prepare histogram data
+            r_table <- ws_sp5[, .(r = cor(wing_m, wing_f, method = "pearson")), by = scinam]
+            r_hist_data <- data.table(scinam = "Summary of Pearson's r", r = r_table$r)
+        p_main =
+          ggplot(ws_sp5, aes(x = wing_m, y = wing_f)) +
+              # regular data
+              geom_blank(data = xy_lims, aes(x = x, y = y)) +
+              geom_point(data = ws_sp5, aes(col = suborder), alpha = 0.5) +
+              geom_smooth(data = ws_sp5, method = 'rlm', se = FALSE, col = 'grey40',
+                          aes(lwd = slope_sp_certain), method.args = list(maxit = 200)) +
+              geom_abline(intercept = 0, slope = 1, lty = 3, col = 'red') +
+              ggpubr::stat_cor(method="pearson", size = 2, cor.coef.name = 'r',
+                              aes(x = wing_m, y = wing_f, label = after_stat(r.label)),
+                              inherit.aes = FALSE) +
+
+              facet_wrap(~scinam, ncol = 6, scales = "free") +
+
+              scale_color_manual(values=c(male, female), name = "Suborder")+ 
+              scale_linewidth_manual(values=c(.25, size_l), name = "Slope certain")+ 
+
+              scale_x_continuous("♂ wing length [mm]", breaks = function(x) {
+                brks <- scales::pretty_breaks(n = 5)(x); brks[brks %% 1 == 0]
+              }) +
+              scale_y_continuous("♀ wing length [mm]", breaks = function(x) {
+                brks <- scales::pretty_breaks(n = 5)(x); brks[brks %% 1 == 0]
+              }) +
+              #labs(tag = 'A') +
+              theme_MB +
+              theme(strip.background = element_blank())
+          
+          p_hist <- ggplot(r_hist_data, aes(x = r)) +
+                  geom_histogram(bins = 20, fill = "gray70", color = "gray50") + 
+                  scale_x_continuous(limits = c(-1, 1), breaks = c(-1, -0.5, 0, 0.5, 1), expand = c(0, 0)) +
+                   scale_y_continuous(expand = c(0, 0))+
+                   geom_vline(xintercept = median(r_hist_data$r), col = green_) +  
+                   annotate("text", x=0, y=2.5, label= "median", col = green_, size = 2, hjust = 1)+
+            labs(x = "Pearson's r", y = "# of nests", subtitle = "Summary") +
+            theme_MB +
+            theme(plot.subtitle = element_text(size=6, margin = margin(b = 0)),
+                  axis.title.y = element_text(margin = margin(r = 0.2)) )
+
+          f_body = p_main + 
+            theme(
+              legend.position = "right",               # keep it on the right
+              legend.justification = c(0.5, 1),        # align legend box to the top
+              legend.box.just = "top",                 # align content to the top of the box
+              legend.margin = margin(t = 0, b = 0),    # reduce vertical padding
+              legend.box.margin = margin(t = 5, b = 5) # spacing between legend and plot
+            ) + 
+            inset_element(p_hist, 
+            left = 0.775, right = 0.91,
+            bottom = 0.08, top = 0.5, 
+            on_top = TRUE, align_to = "full")
+
+          ggsave(file = here::here("Output/Fig_S_body_width-180mm_test.png"), f_body, width = 20, height = 7, units = "cm")
+#'
+#' <br> 
+#' 
 #' ***
 #' ### Within nest bout pair similarity
-# prepare data
+# prepare data TODO:check which bout comes first and adjust correlations and models accordingly, if F is first that one needs to be a predictor
   # fix issue with non-alternating sex
     fm = copy(d)
     fm = fm[!pk == 15799] # fixed for KEPL tuzl 1997 1997-D-76 1  
@@ -623,7 +838,7 @@ f1abc
         by = list(suborder,genus,animal,sp,scinam,species,year, breeding_site,pop,lat_pop, pop_lat, nest, nn, app, tidal, tidal_pop,pop_wing_f, pop_wing_m, pk_nest, lat, n_by_nest, r_neg,slope_nest_certain)  
       ] # same as fmr = fm[!(is.na(r) | duplicated(paste(r, pk_nest))) ]
 
-      # median r based on certain rs only, except for Pluvialis sqatarola having only uncertain ones, while making placement for the free axis (both below opitons work, but not 100% because they forget that chat gpt sets the pedding to the axis - TODO:check and adjust - see the threat there)
+      # median r based on certain rs only, except for Pluvialis sqatarola having only uncertain ones, while making placement for the free axis (both below opitons work, but not 100% because they forget that chat gpt sets the pedding to the axis
   
       # first option
       fmrm = fmr[slope_nest_certain%in%'yes', list(
@@ -808,7 +1023,7 @@ fs1=
       )
 ggsave(file = here::here("Output/Fig_S1_free.png"), fs1, width = 20*0.9, height = 16*0.9, units = "cm")       
 
-#+ fS2 fig.width=10*inch,fig.height=10*inch
+#+ fS2, fig.width=10*inch,fig.height=10*inch
 # prepare colors
 cols_f1 <- rev(c(brewer.pal(11, "Spectral")[1], brewer.pal(11, "Spectral")[4], brewer.pal(11, "Spectral")[7:11]))
 
@@ -982,20 +1197,30 @@ on_top = TRUE, align_to = "full")
 
 ggsave(here::here("Output/Fig_X.png"), fx, width = 11, height = 10, units ='cm')
 
-#' ### Text stats and Table S1 & S2 #TODO:continute here
+#' ### Are within-nests correlations confounded by cahnging bout lengths over incubation period?#' 
+#'
+#' #### Does mean r change if controlled for incubation period?
 # descritpitve within species r
-v = fmr[n_by_nest>10 & slope_nest_certain%in%'yes'] 
+v = fmr[n_by_nest>10 & slope_nest_certain%in%'yes'] #nrow(fmr[n_by_nest>15 & slope_nest_certain%in%'yes'])
+
 #TODO:ask Martin whether it makes sense to limit the data to certain cases only?
 nrow(v)
 summary(v$r)
 
-# r mean controlled for
+# r vs r controlled for mean/median incubation period - no difference
 mi = lmer(r~1+(1|genus) + (1|species) + (1|lat_pop), data = v)
+mi_b = lmer(r~1+ scale(bout_start_j) + (1|genus) + (1|species) + (1|lat_pop), data = v)
 #apply(sim(mi, n.sim = n_sim)@fixef, 2, quantile, prob=c(0.025, 0.5, 0.975))
 table_s1 =m_out(mi, "Table S1", dep = 'r', save_sim = FALSE)
 
-# description within species with and without incubation period
-m0 = lmer(scale(bout_f)~scale(bout_m)+(1|genus) + (bout_m|species) + (1|lat_pop), data = u,
+#' **NO!!!**
+#'
+#' #### Does f-m bout correlation changes when controlled for incubation period? 
+# TODO:scale bout_start_j within population/species incubation period or make it a %
+u = fm[!is.na(bout_start_j)] # TODO:check what happesn when you limit to n_by_nest>10 or 15
+
+# within species without incubation period
+m0 = lmer(scale(bout_f)~scale(bout_m)+(1|genus) + (scale(bout_m)|species) + (1|lat_pop), data = u, 
 control = lmerControl(optimizer = "Nelder_Mead")
 ) # include randome slope or not?
 table_s2a =m_out(m0, "Table S2a", dep = 'bout_f', save_sim = FALSE)
@@ -1003,94 +1228,405 @@ table_s2a =m_out(m0, "Table S2a", dep = 'bout_f', save_sim = FALSE)
 #summary(glht(m0))
 #apply(sim(m0, n.sim = n_sim)@fixef, 2, quantile, prob=c(0.025, 0.5, 0.975))
 
-mb = lmer(scale(bout_f)~poly(bout_start_j,2)+scale(bout_m)+(1|genus) + (bout_m|species) + (1|lat_pop), data = u,
+# within species with incubation period
+mb = lmer(scale(bout_f)~poly(prop_ip,2)+scale(bout_m)+(1|genus) + (scale(bout_m)|species) + (1|lat_pop), data = u,
 control = lmerControl(optimizer = "Nelder_Mead"))
-table_s2b =m_out(m0, "Table S2b", dep = 'bout_f', save_sim = FALSE)
+table_s2b =m_out(mb, "Table S2b", dep = 'bout_f', save_sim = FALSE)
 #summary(mb)
-#summary(glht(m))
+#summary(glht(mb))
 #apply(sim(mb, n.sim = n_sim)@fixef, 2, quantile, prob=c(0.025, 0.5, 0.975))
 
 MuMIn::model.sel(m0,mb)
+
+# within species with incubation period, also as random effect
+mb2 = lmer(scale(bout_f)~poly(prop_ip,2)+scale(bout_m)+(1|genus) + (scale(bout_m) + poly(prop_ip,2)|species)  + (1|lat_pop), data = u,
+control = lmerControl(optimizer = "nloptwrap", optCtrl = list(maxeval = 2e5)))
+summary(mb2)
+summary(glht(mb2))
+plot(allEffects(mb2))
+
+#+ fs_w1, fig.width=8*inch,fig.height=8*inch
+# Fig 2A, but controlled for incubation period; decide whether to limit the data to 15 or 20 pairs
+fm_15 = fm[!is.na(bout_start_j)]
+fm_15 = fm_15[, n_by_nest := .N, pk_nest]
+fm_15[ ,days := max(bout_start_j) - min(bout_start_j), by = pk_nest]
+fm_15 = fm_15[n_by_nest>15 & days>10] # more than 15 f-m bout pairs and 10 days of incubation #ggplot(fm_15[!duplicated(pk_nest)], aes(x = days)) + geom_histogram()
+fm_15[,  slope_nest_ip := rlm(scale(bout_f) ~ scale(bout_m) + poly(bout_start_j,2), maxit = 200)  %>% coef  %>% magrittr::extract(2), by = pk_nest] 
+
+fm_15[, slope_nest_certain_ip := simulate_rlm_no_weights_2(.SD), by = pk_nest]  
+
+mean(fm_15$slope_nest_ip)  
+mean(fm_15$slope_nest)  
+
+summary_stats <- fm_15 %>%
+  summarise(
+    mean_x = mean(slope_nest, na.rm = TRUE),
+    mean_y = mean(slope_nest_ip, na.rm = TRUE),
+    se_x = sd(slope_nest, na.rm = TRUE) / sqrt(n()),
+    se_y = sd(slope_nest_ip, na.rm = TRUE) / sqrt(n())
+  ) %>%
+  mutate(
+    ci_x = 1.96 * se_x,
+    ci_y = 1.96 * se_y
+  )
+fm_15[, list(summary(slope_nest), summary(slope_nest_ip)), by = certain_both]
+
+fm_15[, list(mean(slope_nest), mean(slope_nest_ip)), by = certain_both]
+fm_15[, list(mean(slope_nest), mean(slope_nest_ip)), by = slope_nest_certain]
+fm_15[, list(mean(slope_nest), mean(slope_nest_ip))]
+
+
+fm_15[slope_nest_certain_ip%in%'no' | slope_nest_certain%in%'no' , certain_both:='no']
+fm_15[is.na(certain_both), certain_both := 'yes']
+
+ggplot(fm_15, aes(x = slope_nest, y = slope_nest_ip)) + 
+  geom_point(aes(bg = certain_both), pch = 21, col = "white", size = 3) + 
+  #geom_point() + 
+  geom_abline(intercept = 0, slope = 1, lty = 3, col = "red") +
+  geom_point(data = summary_stats, 
+             aes(x = mean_x, y = mean_y), 
+             color = "red", size = 3, inherit.aes = FALSE) +
+  geom_errorbar(data = summary_stats,
+                aes(x = mean_x, ymin = mean_y - ci_y, ymax = mean_y + ci_y),
+                color = "red", width = 0.02, inherit.aes = FALSE) +
+  geom_errorbarh(data = summary_stats,
+                 aes(y = mean_y, xmin = mean_x - ci_x, xmax = mean_x + ci_x),
+                 color = "red", height = 0.02, inherit.aes = FALSE) +
+  scale_x_continuous(limits = c(-1,1.5))+
+  scale_y_continuous(limits = c(-1,1.5))+
+  labs(x = "♀-♂ bout correlation\n", 
+       y = "♀-♂ bout correlation\ncontrolled for incubation period")+
+  theme_MB
+
+  ggsave(file = here::here("Output/Fig_S_w1_cor-within-within-controled_width-80mm.png"), width = 8, height = 8, units = "cm")
+
+
+#' **<span style="color:red">Coptrolling for incubation period reduces the within nest correlations, indicating that convergence over time is part of the pattern we see!!!</span>**  
+#' **We shall decide whether to use only certain slopes from the first estimation or both.**
+
+#' ### Mate choice vs convergence
+#' Mate choice can be involved despite convergence, if within-nest correlatins are present at the beginning of incubation period. They are, see the model output of one of many models:
+poly_terms <- poly(u$bout_start_j, 2)
+coefs <- attr(poly_terms, "coefs") 
+u[, bout_pol1 := poly_terms[, 1]]
+u[, bout_pol2 := poly_terms[, 2]]
+#u[, bout_pol1 := poly(bout_start_j,2)[,1]]
+#u[, bout_pol2 := poly(bout_start_j,2)[,2]]
+
+mbi4 = lmer(bout_f~bout_m*bout_pol1+bout_m*bout_pol2+(1|genus) + (1|species) + (bout_m+bout_pol1+bout_pol2|lat_pop), data = u, control = lmerControl(optimizer = "Nelder_Mead")) 
+
+bsim = sim(mbi4,n.sim = nsim)
+v <- apply(bsim@fixef, 2, quantile, prob = c(0.5))#plogis(v)
+newD = foreach(i = c(3, 10, 20), .combine = rbind) %do%{
+ data.table(bout_m = seq(min(u$bout_m), max(u$bout_m), length.out =100), bout_start_j = i)
+}
+ 
+# apply original orthogonal poly transformation using saved coefs
+new_poly <- poly(newD$bout_start_j, degree = 2, coefs = coefs)
+
+newD[, bout_pol1 := new_poly[, 1]]
+newD[, bout_pol2 := new_poly[, 2]]
+
+X = model.matrix(~bout_m*bout_pol1+bout_m*bout_pol2, newD)
+predmatrix = matrix(nrow = nrow(newD), ncol = nsim)
+for(j in 1:nsim) predmatrix[,j] <-(X %*% bsim@fixef[j,])
+newD$pred <- (X %*% v) # fitted values
+newD$lwr <- apply(predmatrix, 1, quantile, prob = 0.025)
+newD$upr <- apply(predmatrix, 1, quantile, prob = 0.975)
+
+ggplot(data = newD) + 
+  geom_ribbon(aes(x = bout_m, ymin = lwr, ymax = upr), 
+              fill = "grey90", alpha = 0.9) +
+  geom_line(aes(x = bout_m, y = pred)) +
+  facet_wrap(~bout_start_j, ncol = 3) + theme_MB
+
+custom_colors <- pal_locuszoom()(7)[4:2]
+
+gm1 = 
+ggplot(data = newD) + 
+  geom_ribbon(aes(x = bout_m, ymin = lwr, ymax = upr, fill = factor(bout_start_j)), alpha = 0.3) +
+  geom_line(aes(x = bout_m, y = pred, col = factor(bout_start_j))) +
+  scale_color_manual(name = 'Incubation period', values = custom_colors,  labels = c('early', 'mid', 'late'), guide = guide_legend(reverse = TRUE)) +
+  scale_fill_manual(name = 'Incubation period', values = custom_colors, labels = c('early', 'mid', 'late'),  guide = guide_legend(reverse = TRUE)) +
+  scale_x_continuous("♂ bout [hours]") +
+  scale_y_continuous("♀ bout [hours]") +
+  labs(subtitle = "random slope of ♂ bout + poly(incubation period")+
+  theme_MB
+
+mbi5 = lmer(bout_f~bout_m*bout_pol1+bout_m*bout_pol2+(1|genus) + (1|species) + (bout_m*bout_pol1+bout_m*bout_pol2|lat_pop), data = u, control = lmerControl(optimizer = "Nelder_Mead")) 
+
+bsim = sim(mbi5,n.sim = nsim)
+v <- apply(bsim@fixef, 2, quantile, prob = c(0.5))#plogis(v)
+newD = foreach(i = c(3, 10, 20), .combine = rbind) %do%{
+ data.table(bout_m = seq(min(u$bout_m), max(u$bout_m), length.out =100), bout_start_j = i)
+}
+
+# apply original orthogonal poly transformation using saved coefs
+new_poly <- poly(newD$bout_start_j, degree = 2, coefs = coefs)
+newD[, bout_pol1 := new_poly[, 1]]
+newD[, bout_pol2 := new_poly[, 2]]
+
+X = model.matrix(~bout_m*bout_pol1+bout_m*bout_pol2, newD)
+predmatrix = matrix(nrow = nrow(newD), ncol = nsim)
+for(j in 1:nsim) predmatrix[,j] <-(X %*% bsim@fixef[j,])
+newD$pred <- (X %*% v) # fitted values
+newD$lwr <- apply(predmatrix, 1, quantile, prob = 0.025)
+newD$upr <- apply(predmatrix, 1, quantile, prob = 0.975)
+
+gm2 = 
+ggplot(data = newD) + 
+  geom_ribbon(aes(x = bout_m, ymin = lwr, ymax = upr, fill = factor(bout_start_j)), alpha = 0.3) +
+  geom_line(aes(x = bout_m, y = pred, col = factor(bout_start_j))) +
+  scale_color_manual(name = 'Incubation period', values = custom_colors,  labels = c('early', 'mid', 'late'), guide = guide_legend(reverse = TRUE)) +
+  scale_fill_manual(name = 'Incubation period', values = custom_colors, labels = c('early', 'mid', 'late'),  guide = guide_legend(reverse = TRUE)) +
+  scale_x_continuous("♂ bout [hours]") +
+  scale_y_continuous("♀ bout [hours]") +
+  labs(subtitle = "random slope of ♂ bout:poly(incubation period")+
+  theme_MB
+
+mbi = lmer(bout_f~bout_m*bout_pol1+bout_m*bout_pol2+(1|genus) + (1|species) + (bout_m|lat_pop), data = u, control = lmerControl(optimizer = "Nelder_Mead")) 
+
+bsim = sim(mbi,n.sim = nsim)
+v <- apply(bsim@fixef, 2, quantile, prob = c(0.5))#plogis(v)
+newD = foreach(i = c(3, 10, 20), .combine = rbind) %do%{
+ data.table(bout_m = seq(min(u$bout_m), max(u$bout_m), length.out =100), bout_start_j = i)
+}
+
+# apply original orthogonal poly transformation using saved coefs
+new_poly <- poly(newD$bout_start_j, degree = 2, coefs = coefs)
+newD[, bout_pol1 := new_poly[, 1]]
+newD[, bout_pol2 := new_poly[, 2]]
+
+X = model.matrix(~bout_m*bout_pol1+bout_m*bout_pol2, newD)
+predmatrix = matrix(nrow = nrow(newD), ncol = nsim)
+for(j in 1:nsim) predmatrix[,j] <-(X %*% bsim@fixef[j,])
+newD$pred <- (X %*% v) # fitted values
+newD$lwr <- apply(predmatrix, 1, quantile, prob = 0.025)
+newD$upr <- apply(predmatrix, 1, quantile, prob = 0.975)
+
+gm3 = 
+ggplot(data = newD) + 
+  geom_ribbon(aes(x = bout_m, ymin = lwr, ymax = upr, fill = factor(bout_start_j)), alpha = 0.3) +
+  geom_line(aes(x = bout_m, y = pred, col = factor(bout_start_j))) +
+  scale_color_manual(name = 'Incubation period', values = custom_colors,  labels = c('early', 'mid', 'late'), guide = guide_legend(reverse = TRUE)) +
+  scale_fill_manual(name = 'Incubation period', values = custom_colors, labels = c('early', 'mid', 'late'),  guide = guide_legend(reverse = TRUE)) +
+  scale_x_continuous("♂ bout [hours]") +
+  scale_y_continuous("♀ bout [hours]") +
+  labs(subtitle = "random slope of ♂ bout")+
+  theme_MB
+
+
+mbi2 = lmer(bout_f~bout_m*bout_pol1+bout_m*bout_pol2+(1|genus) + (1|species) + (bout_pol1+bout_pol2|lat_pop), data = u, control = lmerControl(optimizer = "Nelder_Mead")) 
+
+bsim = sim(mbi2,n.sim = nsim)
+v <- apply(bsim@fixef, 2, quantile, prob = c(0.5))#plogis(v)
+newD = foreach(i = c(3, 10, 20), .combine = rbind) %do%{
+ data.table(bout_m = seq(min(u$bout_m), max(u$bout_m), length.out =100), bout_start_j = i)
+}
+
+# apply original orthogonal poly transformation using saved coefs
+new_poly <- poly(newD$bout_start_j, degree = 2, coefs = coefs)
+newD[, bout_pol1 := new_poly[, 1]]
+newD[, bout_pol2 := new_poly[, 2]]
+
+X = model.matrix(~bout_m*bout_pol1+bout_m*bout_pol2, newD)
+predmatrix = matrix(nrow = nrow(newD), ncol = nsim)
+for(j in 1:nsim) predmatrix[,j] <-(X %*% bsim@fixef[j,])
+newD$pred <- (X %*% v) # fitted values
+newD$lwr <- apply(predmatrix, 1, quantile, prob = 0.025)
+newD$upr <- apply(predmatrix, 1, quantile, prob = 0.975)
+
+gm4 = 
+ggplot(data = newD) + 
+  geom_ribbon(aes(x = bout_m, ymin = lwr, ymax = upr, fill = factor(bout_start_j)), alpha = 0.3) +
+  geom_line(aes(x = bout_m, y = pred, col = factor(bout_start_j))) +
+  scale_color_manual(name = 'Incubation period', values = custom_colors,  labels = c('early', 'mid', 'late'), guide = guide_legend(reverse = TRUE)) +
+  scale_fill_manual(name = 'Incubation period', values = custom_colors, labels = c('early', 'mid', 'late'),  guide = guide_legend(reverse = TRUE)) +
+  scale_x_continuous("♂ bout [hours]") +
+  scale_y_continuous("♀ bout [hours]") +
+  labs(subtitle = "random slope of poly(incubation period)")+
+  theme_MB
+
+grid.arrange(gm3, gm4, gm2, gm1, ncol = 2)
+
+fig_S_w2 = (gm3 + theme(legend.position = "none") + 
+     gm4 + theme(legend.position = "none") + 
+     gm2 + theme(legend.position = "none") + 
+     gm1 + plot_layout(guides = "collect")) + 
+     plot_layout(ncol = 2) & 
+     theme(legend.position = "right")  
+
+ggsave(file = here::here("Output/Fig_S_w2_correct-poly.png"), fig_S_w2, width = 16, height = 15, units = "cm")
+fig_S_w2
+# version 2 - ranom intercept - species
+custom_colors <- pal_locuszoom()(7)[4:2]
+
+mbi4 = lmer(bout_f~bout_m*bout_pol1+bout_m*bout_pol2+(1|genus) + (bout_m+bout_pol1+bout_pol2|species) + (1|lat_pop), data = u, control = lmerControl(optimizer = "Nelder_Mead")) 
+
+bsim = sim(mbi4,n.sim = nsim)
+v <- apply(bsim@fixef, 2, quantile, prob = c(0.5))#plogis(v)
+newD = foreach(i = c(3, 10, 20), .combine = rbind) %do%{
+ data.table(bout_m = seq(min(u$bout_m), max(u$bout_m), length.out =100), bout_start_j = i)
+}
+
+newD[, bout_pol1 := poly(bout_start_j,2)[,1]]
+newD[, bout_pol2 := poly(bout_start_j,2)[,2]]
+
+X = model.matrix(~bout_m*bout_pol1+bout_m*bout_pol2, newD)
+predmatrix = matrix(nrow = nrow(newD), ncol = nsim)
+for(j in 1:nsim) predmatrix[,j] <-(X %*% bsim@fixef[j,])
+newD$pred <- (X %*% v) # fitted values
+newD$lwr <- apply(predmatrix, 1, quantile, prob = 0.025)
+newD$upr <- apply(predmatrix, 1, quantile, prob = 0.975)
+
+gm1 = 
+ggplot(data = newD) + 
+  geom_ribbon(aes(x = bout_m, ymin = lwr, ymax = upr, fill = factor(bout_start_j)), alpha = 0.3) +
+  geom_line(aes(x = bout_m, y = pred, col = factor(bout_start_j))) +
+  scale_color_manual(name = 'Incubation period', values = custom_colors,  labels = c('early', 'mid', 'late'), guide = guide_legend(reverse = TRUE)) +
+  scale_fill_manual(name = 'Incubation period', values = custom_colors, labels = c('early', 'mid', 'late'),  guide = guide_legend(reverse = TRUE)) +
+  scale_x_continuous("♂ bout [hours]") +
+  scale_y_continuous("♀ bout [hours]") +
+  labs(subtitle = "random slope of ♂ bout + poly(incubation period")+
+  theme_MB
+
+mbi5 = lmer(bout_f~bout_m*bout_pol1+bout_m*bout_pol2+(1|genus) + (bout_m*bout_pol1+bout_m*bout_pol2|species) + (1|lat_pop), data = u, control = lmerControl(optimizer = "Nelder_Mead")) 
+
+bsim = sim(mbi5,n.sim = nsim)
+v <- apply(bsim@fixef, 2, quantile, prob = c(0.5))#plogis(v)
+newD = foreach(i = c(3, 10, 20), .combine = rbind) %do%{
+ data.table(bout_m = seq(min(u$bout_m), max(u$bout_m), length.out =100), bout_start_j = i)
+}
+
+newD[, bout_pol1 := poly(bout_start_j,2)[,1]]
+newD[, bout_pol2 := poly(bout_start_j,2)[,2]]
+
+X = model.matrix(~bout_m*bout_pol1+bout_m*bout_pol2, newD)
+predmatrix = matrix(nrow = nrow(newD), ncol = nsim)
+for(j in 1:nsim) predmatrix[,j] <-(X %*% bsim@fixef[j,])
+newD$pred <- (X %*% v) # fitted values
+newD$lwr <- apply(predmatrix, 1, quantile, prob = 0.025)
+newD$upr <- apply(predmatrix, 1, quantile, prob = 0.975)
+
+gm2 = 
+ggplot(data = newD) + 
+  geom_ribbon(aes(x = bout_m, ymin = lwr, ymax = upr, fill = factor(bout_start_j)), alpha = 0.3) +
+  geom_line(aes(x = bout_m, y = pred, col = factor(bout_start_j))) +
+  scale_color_manual(name = 'Incubation period', values = custom_colors,  labels = c('early', 'mid', 'late'), guide = guide_legend(reverse = TRUE)) +
+  scale_fill_manual(name = 'Incubation period', values = custom_colors, labels = c('early', 'mid', 'late'),  guide = guide_legend(reverse = TRUE)) +
+  scale_x_continuous("♂ bout [hours]") +
+  scale_y_continuous("♀ bout [hours]") +
+  labs(subtitle = "random slope of ♂ bout:poly(incubation period")+
+  theme_MB
+
+mbi = lmer(bout_f~bout_m*bout_pol1+bout_m*bout_pol2+(1|genus) + (bout_m|species) + (1|lat_pop), data = u, control = lmerControl(optimizer = "Nelder_Mead")) 
+
+bsim = sim(mbi,n.sim = nsim)
+v <- apply(bsim@fixef, 2, quantile, prob = c(0.5))#plogis(v)
+newD = foreach(i = c(3, 10, 20), .combine = rbind) %do%{
+ data.table(bout_m = seq(min(u$bout_m), max(u$bout_m), length.out =100), bout_start_j = i)
+}
+
+newD[, bout_pol1 := poly(bout_start_j,2)[,1]]
+newD[, bout_pol2 := poly(bout_start_j,2)[,2]]
+
+X = model.matrix(~bout_m*bout_pol1+bout_m*bout_pol2, newD)
+predmatrix = matrix(nrow = nrow(newD), ncol = nsim)
+for(j in 1:nsim) predmatrix[,j] <-(X %*% bsim@fixef[j,])
+newD$pred <- (X %*% v) # fitted values
+newD$lwr <- apply(predmatrix, 1, quantile, prob = 0.025)
+newD$upr <- apply(predmatrix, 1, quantile, prob = 0.975)
+
+gm3 = 
+ggplot(data = newD) + 
+  geom_ribbon(aes(x = bout_m, ymin = lwr, ymax = upr, fill = factor(bout_start_j)), alpha = 0.3) +
+  geom_line(aes(x = bout_m, y = pred, col = factor(bout_start_j))) +
+  scale_color_manual(name = 'Incubation period', values = custom_colors,  labels = c('early', 'mid', 'late'), guide = guide_legend(reverse = TRUE)) +
+  scale_fill_manual(name = 'Incubation period', values = custom_colors, labels = c('early', 'mid', 'late'),  guide = guide_legend(reverse = TRUE)) +
+  scale_x_continuous("♂ bout [hours]") +
+  scale_y_continuous("♀ bout [hours]") +
+  labs(subtitle = "random slope of ♂ bout")+
+  theme_MB
+
+
+mbi2 = lmer(bout_f~bout_m*bout_pol1+bout_m*bout_pol2+(1|genus) + (bout_pol1+bout_m*bout_pol2|species) + (1|lat_pop), data = u, control = lmerControl(optimizer = "Nelder_Mead")) 
+
+bsim = sim(mbi2,n.sim = nsim)
+v <- apply(bsim@fixef, 2, quantile, prob = c(0.5))#plogis(v)
+newD = foreach(i = c(3, 10, 20), .combine = rbind) %do%{
+ data.table(bout_m = seq(min(u$bout_m), max(u$bout_m), length.out =100), bout_start_j = i)
+}
+
+newD[, bout_pol1 := poly(bout_start_j,2)[,1]]
+newD[, bout_pol2 := poly(bout_start_j,2)[,2]]
+
+X = model.matrix(~bout_m*bout_pol1+bout_m*bout_pol2, newD)
+predmatrix = matrix(nrow = nrow(newD), ncol = nsim)
+for(j in 1:nsim) predmatrix[,j] <-(X %*% bsim@fixef[j,])
+newD$pred <- (X %*% v) # fitted values
+newD$lwr <- apply(predmatrix, 1, quantile, prob = 0.025)
+newD$upr <- apply(predmatrix, 1, quantile, prob = 0.975)
+
+gm4 = 
+ggplot(data = newD) + 
+  geom_ribbon(aes(x = bout_m, ymin = lwr, ymax = upr, fill = factor(bout_start_j)), alpha = 0.3) +
+  geom_line(aes(x = bout_m, y = pred, col = factor(bout_start_j))) +
+  scale_color_manual(name = 'Incubation period', values = custom_colors,  labels = c('early', 'mid', 'late'), guide = guide_legend(reverse = TRUE)) +
+  scale_fill_manual(name = 'Incubation period', values = custom_colors, labels = c('early', 'mid', 'late'),  guide = guide_legend(reverse = TRUE)) +
+  scale_x_continuous("♂ bout [hours]") +
+  scale_y_continuous("♀ bout [hours]") +
+  labs(subtitle = "random slope of poly(incubation period")+
+  theme_MB
+
+#grid.arrange(gm3, gm4, gm2, gm1, ncol = 2)
+
+fig_S_w2b = (gm3 + theme(legend.position = "none") + 
+     gm4 + theme(legend.position = "none") + 
+     gm2 + theme(legend.position = "none") + 
+     gm1 + plot_layout(guides = "collect")) + 
+     plot_layout(ncol = 2) & 
+     theme(legend.position = "right")  
+
+ggsave(file = here::here("Output/Fig_S_w2b.png"), fig_S_w2b, width = 16, height = 15, units = "cm")
+fig_S_w2b
+
+#' alternative model outputs:
+mbi0_ = lmer(bout_f~bout_m*poly(bout_start_j,2)+(1|genus) + (1|species) + (1|lat_pop), data = u,
+control = lmerControl(optimizer = "Nelder_Mead")) 
+summary(mbi0_)
+plot(allEffects(mbi0_))
+
+mbi_ = lmer(scale(bout_f)~scale(bout_m)*poly(bout_start_j,2)+(1|genus) + (1|species) + (bout_m|lat_pop), data = u,
+control = lmerControl(optimizer = "Nelder_Mead"))
+summary(mbi_)
+plot(allEffects(mbi_))
+
+mbi2_ = lmer(bout_f~bout_m*poly(bout_start_j,2)+(1|genus) + (1|species) + (poly(bout_start_j,2)|lat_pop), data = u,
+control = lmerControl(optimizer = "Nelder_Mead")) # converges well
+summary(mbi2_)
+plot(allEffects(mbi2_))
+
+mbi3_ = lmer(scale(bout_f)~scale(bout_m)*poly(bout_start_j,2)+(1|genus) + (poly(bout_start_j,2)|species) + (1|lat_pop), data = u,
+control = lmerControl(optimizer = "Nelder_Mead")) # converges well
+summary(mbi3_)
+plot(allEffects(mbi3_))
+
+mbi4_ = lmer(scale(bout_f)~scale(bout_m)*poly(bout_start_j,2)+(1|genus) + (1|species) + (bout_m+poly(bout_start_j,2)|lat_pop), data = u, control = lmerControl(optimizer = "Nelder_Mead"))  # perhaps the best MODEL - converges, but boudnary singular, likely due to bout_m explaining little
+summary(mbi4_)
+plot(allEffects(mbi4_))
+
+mbi5_ = lmer(scale(bout_f)~scale(bout_m)*poly(bout_start_j,2)+(1|genus) + (1|species) + (bout_m*poly(bout_start_j,2)|lat_pop), data = u, control = lmerControl(optimizer = "Nelder_Mead")) 
+summary(mbi5_)
+plot(allEffects(mbi5_))
+
+mbi6_ = lmer(scale(bout_f)~scale(bout_m)*poly(bout_start_j,2)+(1|genus) + (bout_m|species) + (poly(bout_start_j,2)|lat_pop), data = u, control = lmerControl(optimizer = "Nelder_Mead")) 
+summary(mbi6_)
+plot(allEffects(mbi6_))
 
 # export
 rbind(table_s1, table_s2a, table_s2b) %>% kableExtra::kbl() %>%
   kableExtra::kable_paper("hover", full_width = F)
 
-# TEST whether within end_nest_stat~within nest r
-n[, pk_nest:=paste(sp, breeding_site, year, nest, nn)]
 
-vn = merge(v,n[,.(pk_nest,end_state)], all.x = TRUE)
-
-vn[end_state%in%c('fl','h'), success :=1]
-vn[end_state%in%c('p','d'), success :=0]
-vn01 = vn[!is.na(success)]
-
-m = glmer(success~r +(1|genus) + (1|species) + (1|lat_pop), family = binomial, data = vn01)
-m = glmer(success~scale(r)  + (scale(r)|lat_pop), family = binomial, data = vn01, control = glmerControl(optimizer = "nloptwrap", optCtrl = list(xtol_rel = 1e-6)))
-summary(m)
-plot(allEffects(m))
-# !If anything success decreases with increasing r
-
-#TODO:test whether assortative mating can be the median percentage of incubation period the bouts are comming from
-xt = dd_n10[!duplicated(pk_nest)]
-xt = xt[n_by_sp>10]
-
-ggplot(data = xt) + 
-geom_point(aes(x = n_days, y = med_f), fill = 'red', alpha = 0.5, col = "white", pch = 21) +
-geom_point(aes(x = n_days, y = med_m), fill = 'blue', alpha = 0.5, col = "white", pch = 21) +
-facet_wrap(~scinam, ncol = 6) + 
-labs(x = "# days recorded", y = "Bout length [h]")
-ggsave('Output/rev_bout-days.png', width = 20, height = 12, units = "cm")
-
-ggplot(data = xt) + 
-geom_point(aes(x = med_bout_start_j, y = med_f), fill = 'red', alpha = 0.5, col = "white", pch = 21) +
-#stat_smooth(method = "lm", se = FALSE, aes(x = med_bout_start_j, y = med_f), col = 'red')+
-geom_point(aes(x = med_bout_start_j, y = med_m), fill = 'blue', alpha = 0.5, col = "white", pch = 21) +
-#stat_smooth(method = "lm", se = FALSE, aes(x = med_bout_start_j, y = med_m), col = 'blue')+
-facet_wrap(~scinam, ncol = 6) + 
-labs(x = "Median incubation period of the recorded bouts", y = "Bout length [h]")
-ggsave('Output/rev_bout-inc_per.png', width = 20, height = 12, units = "cm")
-
-ggplot(data = xt) + 
-geom_point(aes(x = med_bout_start_j, y = med_f), fill = 'red', alpha = 0.5, col = "white", pch = 21) +
-stat_smooth(method = "lm", se = FALSE, aes(x = med_bout_start_j, y = med_f), col = 'red')+
-geom_point(aes(x = med_bout_start_j, y = med_m), fill = 'blue', alpha = 0.5, col = "white", pch = 21) +
-stat_smooth(method = "lm", se = FALSE, aes(x = med_bout_start_j, y = med_m), col = 'blue')+
-facet_wrap(~scinam, ncol = 6) + 
-labs(x = "Median incubation period of the recorded bouts", y = "Bout length [h]")
-ggsave('Output/rev_bout-inc_per_fit.png', width = 20, height = 12, units = "cm")
-
-require(foreach)
-p = foreach(i = unique(xt$scinam), .combine = rbind) %do% {
-  # i = 'Calidris pusilla'
-  xti = xt[scinam==i]  
-  mi = lm(med_f~med_m, xti)
-  t_mi =m_out(mi, paste(i, "simple"), dep = 'med_f', save_sim = FALSE, type = "lm")
-  t_mi[,scinam := i]
-  t_mi[, model :='simple']
-  t_mi[, N :=N[1]]
-  
-  mji = lm(med_f~med_bout_start_j + med_m, xti)
-  t_mji =m_out(mji, paste(i, "inc_per"), dep = 'med_f', save_sim = FALSE, type = "lm")
-  t_mji[,scinam := i]
-  t_mji[, model :='inc_per']
-  t_mji[, N :=N[1]]
-  
-  t_mji[, estimate_s:=c(t_mi$estimate_r[1],NA,t_mi$estimate_r[2])]
-  t_mji[, lwr_s:=c(t_mi$lwr_r[1],NA,t_mi$lwr_r[2])]
-  t_mji[, upr_s:=c(t_mi$upr_r[1],NA,t_mi$upr_r[2])]
-
-  return(t_mji)
-}
-ggplot(p[effect%in%'med_m'], aes(x = estimate_s, y = estimate_r)) +  
-  geom_point() +
-  #geom_errorbar(aes(ymin = lwr_r, ymax = upr_r), width = 0.1) +  # Error bars for y-axis
-  #geom_errorbarh(aes(xmin = lwr_s, xmax = upr_s), height = 0.1)  # Error bars for x-axis
-  geom_abline(intercept = 0, slope = 1, lty = 3, col = "grey") +
-  labs(x = "Estimate", y = "Estiamte controlled for incubation period")
-ggsave('Output/rev_bout-inc_per_fit.png', width = 8, height = 8, units = "cm")
-
-# TODO:restrict anal just to specific incubation period
-# TODO:2)	Can you test for the convergence by looking at the correlation in bout length early and late in incubation to show the synchronisation and contrast that for successful and failed? If you show that pairs are aligning their bouts as nest age and nests that do it more quickly are more likely to hatch – implication of ass mating. If not, then it is not convergence of behaviour – whether it is active/passive choice, there is pre-programmed or environmental influences
 
 # end
