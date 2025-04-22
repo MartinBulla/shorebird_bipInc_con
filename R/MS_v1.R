@@ -1494,20 +1494,92 @@ newD[, pred := pred_z * sd_bout_f + mean_bout_f]
 newD[, lwr := lwr_z * sd_bout_f + mean_bout_f]
 newD[, upr := upr_z * sd_bout_f + mean_bout_f]
 
-pred_fixed = predict_fixed_effects_scaled_model(model = mbi5zp)
+pred_fixed <- predict_fixed_effects_scaled_model(
+  model = mbi5zp,
+  nsim = 5000,
+  mean_bout_m = mean(u$bout_m),
+  sd_bout_m = sd(u$bout_m),
+  mean_bout_f = mean(u$bout_f),
+  sd_bout_f = sd(u$bout_f),
+  coefs = coefs,
+  bout_m_range = range(u$bout_m)
+)
+
+lat_pops <- unique(u$lat_pop)
+
+pred_all_pops <- map_dfr(lat_pops, ~ predict_conditional_scaled_model(
+  model = mbi5zp,
+  group_id = .x,
+  group_var = "lat_pop",
+  nsim = 500,  # lower for faster rendering
+  mean_bout_m = mean(u$bout_m),
+  sd_bout_m = sd(u$bout_m),
+  mean_bout_f = mean(u$bout_f),
+  sd_bout_f = sd(u$bout_f),
+  coefs = coefs,
+  bout_m_range = range(u$bout_m),
+  ip_values = c(0.05, 0.5, 0.9)  # or just 0.5 for a single median line per pop
+))
+
+library(progress)
+
+pb <- progress_bar$new(total = length(lat_pops))
+pred_all_pops <- data.table::rbindlist(lapply(lat_pops, function(pop) {
+  try(pb$tick(), silent = TRUE)
+  predict_conditional_scaled_mean(
+    model = mbi5zp,
+    group_id = pop,
+    group_var = "lat_pop",
+    data = u,
+    nsim = 500,  # ← now respected!
+    mean_bout_m = mean(u$bout_m),
+    sd_bout_m = sd(u$bout_m),
+    mean_bout_f = mean(u$bout_f),
+    sd_bout_f = sd(u$bout_f),
+    coefs = coefs,
+    ip_values = c(0.05, 0.5, 0.9)
+  )
+}))  
 
 gm2 = 
 ggplot(data = pred_fixed) + 
+  geom_line(data = pred_all_pops, aes(x = bout_m, y = pred, group = lat_pop), color = 'grey75', alpha = 0.5, lwd = 0.25) +
   geom_ribbon(aes(x = bout_m, ymin = lwr, ymax = upr, fill = factor(prop_ip)), alpha = 0.3) +
   geom_line(aes(x = bout_m, y = pred, col = factor(prop_ip))) +
   scale_color_manual(name = 'Incubation period', values = custom_colors,  labels = c('early', 'mid', 'late'), guide = guide_legend(reverse = TRUE)) +
   scale_fill_manual(name = 'Incubation period', values = custom_colors, labels = c('early', 'mid', 'late'),  guide = guide_legend(reverse = TRUE)) +
   scale_x_continuous("♂ bout [hours]") +
-  scale_y_continuous("♀ bout [hours]") +
-  facet_wrap(~prop_ip) + 
-  labs(subtitle = "random slope of ♂ bout:poly(incubation period")+
-  theme_MB
+  scale_y_continuous("♀ bout [hours]", expand=c(0,0)) +
+  coord_cartesian(ylim = c(0, 30), xlim = c(0, 40)) + 
+  facet_wrap(~prop_ip, labeller = as_labeller(c(
+    "0.05" = "early",
+    "0.5"  = "mid",
+    "0.9"  = "late"
+    ))) + 
+  #labs(subtitle = "random slope of ♂ bout:poly(incubation period")+
+  labs(subtitle = "Incubation period") +
+  theme_MB +
+  theme(legend.position = "none",
+        plot.subtitle = element_text(hjust = 0.5, size = rel(0.85), margin = margin(b = 1)),
+        strip.background = element_blank())
 
+ggsave('Output/Fig_S_w2_correct-poly_v2.png', gm2, width = 12, height = 5, units = "cm") 
+
+out_m_test = m_out(mbi5zp, "test", dep ='bout_f')
+
+#test
+plot_model_predictions(
+  model = mbi5zp,
+  data = u,
+  coefs = coefs,
+  nsim = 500,
+  mean_bout_m = mean(u$bout_m),
+  sd_bout_m = sd(u$bout_m),
+  mean_bout_f = mean(u$bout_f),
+  sd_bout_f = sd(u$bout_f),
+  custom_colors = custom_colors,
+  save_path = "Output/Fig_S_w2_correct-poly_v3-test.png"
+)
 
 ggplot(u, aes(x = bout_m, y = bout_f, col = prop_ip)) + geom_point()
 mbi = lmer(bout_f~bout_m*bout_pol1+bout_m*bout_pol2+(1|genus) + (1|species) + (bout_m|lat_pop), data = u, control = lmerControl(optimizer = "Nelder_Mead")) 
