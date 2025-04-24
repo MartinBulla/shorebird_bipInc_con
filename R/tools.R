@@ -60,7 +60,7 @@ getnode <- function(...) {
 }
 
 # load/install packages
-  packages = c('ape','arm','RColorBrewer','data.table', 'effects', 'forcats', 'foreach','ggExtra', 'ggnewscale', 'ggimage', 'ggplot2','ggsci', 'ggtext','ggthemes', 'ggtree','glue',  'grid','gridExtra', 'here', 'Hmisc','htmlTable', 'lattice', 'lubridate', 'magick', 'magrittr', 'maptools', 'multcomp', 'pals','patchwork', 'performance', 'phangorn','phytools','plyr','raster','reshape2', 'sandwich','scales','stringr','readxl','zoo', 'gt', 'tidyverse', 'ggpubr')
+  packages = c('ape','arm','brms','RColorBrewer','data.table', 'effects', 'forcats', 'foreach','ggExtra', 'ggnewscale', 'ggimage', 'ggplot2','ggsci', 'ggtext','ggthemes', 'ggtree','glue',  'grid','gridExtra', 'here', 'Hmisc','htmlTable', 'kableExtra','lattice', 'lubridate', 'magick', 'magrittr', 'maptools', 'multcomp', 'pals','patchwork', 'performance', 'phangorn','phytools','plyr','raster','reshape2', 'sandwich','scales','stringr','readxl','zoo', 'gt', 'tidyverse', 'ggpubr')
   sapply(packages, function(x) suppressPackageStartupMessages(using(x)) )
 
 # Customized ggplot themes
@@ -175,7 +175,7 @@ getnode <- function(...) {
       if((ci[1, 2] <= 0 && ci[2, 2] >= 0)==TRUE){'no'}else{'yes'}
     }    
 # Function for credible intervals from group-wise robust regression without weights 2
-    simulate_rlm_no_weights_2 <- function(dt) {
+    simulate_rlm_no_weights_w <- function(dt) {
       n_sim = 5000
       #dt=fm[pk_nest=='AMGP barr 2010 AMGP230 1']  
       # Extract coefficients
